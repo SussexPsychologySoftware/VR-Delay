@@ -7,7 +7,6 @@ public class ExperimentManager : MonoBehaviour
 {
     [Header("Session Setup")]
     public string participantID = "test01";
-    public int sessionNumber = 1;
 
     [Header("Experiment State")]
     public WebcamDelay webcamDisplay; // Drag your Webcam Quad here
@@ -29,7 +28,7 @@ public class ExperimentManager : MonoBehaviour
         if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
 
         // 2. Create File: Session_1_Date_Time.csv
-        string fileName = $"Session_{sessionNumber}_{DateTime.Now:yyyy-MM-dd_HH-mm}.csv";
+        string fileName = $"{DateTime.Now:yyyy-MM-dd_HH-mm}.csv";
         savePath = Path.Combine(folder, fileName);
 
         // 3. Write Headers
