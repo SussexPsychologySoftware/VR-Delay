@@ -1990,8 +1990,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   participantID: test01
   sessionNumber: 1
-  webcamDisplay: {fileID: 0}
-  isRecording: 0
+  webcamDisplay: {fileID: 1582580840}
+  isRecording: 1
 --- !u!4 &2018943630
 Transform:
   m_ObjectHideFlags: 0
