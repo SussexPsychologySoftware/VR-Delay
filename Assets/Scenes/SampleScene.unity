@@ -1208,10 +1208,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   deviceName: Terra HD1080PC Camera
+  viewSize: 0.45
+  fixAspectRatio: 1
   useDelay: 0
   delaySeconds: 2
   targetFPS: 30
-  resolution: {x: 1280, y: 720}
 --- !u!64 &1582580841
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -1294,7 +1295,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0.5}
-  m_LocalScale: {x: 0.8, y: 0.45, z: 1}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 409086908}

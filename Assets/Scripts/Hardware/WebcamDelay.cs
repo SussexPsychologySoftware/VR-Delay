@@ -4,89 +4,103 @@ using System.Collections.Generic;
 public class WebcamDelay : MonoBehaviour
 {
     [Header("Device Selection")]
-    [Tooltip("Leave empty to use default. Check Console for list of names.")]
     public string deviceName = ""; 
     
+    [Header("Display Settings")]
+    [Tooltip("Size multiplier. 1.0 = 1 meter tall. Adjust this to fill view.")]
+    [Range(0.1f, 2.0f)] public float viewSize = 0.8f; 
+    public bool fixAspectRatio = true;
+
     [Header("Delay Settings")]
     public bool useDelay = false;
     [Range(0f, 5f)] public float delaySeconds = 1.0f;
 
     [Header("Performance")]
-    public int targetFPS = 30; // 30 is standard for most webcams
-    public Vector2Int resolution = new Vector2Int(1280, 720);
+    public int targetFPS = 30;
 
     // Internal
     private WebCamTexture webcam;
     private Renderer screenRenderer;
     private Texture2D displayTexture;
     private Queue<Color32[]> frameBuffer = new Queue<Color32[]>();
+    private bool isRatioSet = false;
 
     void Start()
     {
         screenRenderer = GetComponent<Renderer>();
-        ListDevices(); // Prints names to Console
         StartWebcam();
-    }
-
-    void ListDevices()
-    {
-        Debug.Log("--- Available Webcams ---");
-        foreach (var device in WebCamTexture.devices)
-        {
-            Debug.Log($"Camera: {device.name}");
-        }
-        Debug.Log("-------------------------");
     }
 
     void StartWebcam()
     {
-        // 1. Create the Webcam Texture
-        // If specific name is given, use it. Otherwise use default.
         string nameToUse = string.IsNullOrEmpty(deviceName) ? WebCamTexture.devices[0].name : deviceName;
-        
-        webcam = new WebCamTexture(nameToUse, resolution.x, resolution.y, targetFPS);
+        // Request a high resolution, but the camera might give us something else
+        webcam = new WebCamTexture(nameToUse, 1920, 1080, targetFPS);
         webcam.Play();
 
-        // 2. Create the Display Texture (The canvas we paint on)
         displayTexture = new Texture2D(webcam.width, webcam.height);
         screenRenderer.material.mainTexture = displayTexture;
-        
-        Debug.Log($"Started Webcam: {nameToUse} at {webcam.width}x{webcam.height}");
     }
 
     void Update()
     {
-        // Only process if the webcam has a new frame ready
-        if (webcam.didUpdateThisFrame)
+        // 1. Check if webcam has started and we haven't set the size yet
+        if (webcam.didUpdateThisFrame) 
         {
-            Color32[] currentPixels = webcam.GetPixels32();
-
-            if (useDelay)
+            // Only adjust scale once the camera gives us valid dimensions ( > 100px)
+            if (fixAspectRatio && !isRatioSet && webcam.width > 100)
             {
-                // A. Add current frame to the buffer (The "Waiting Room")
-                frameBuffer.Enqueue(currentPixels);
-
-                // B. Calculate how many frames correspond to the requested seconds
-                // e.g. 1.0s * 30fps = 30 frames
-                int requiredFrameCount = Mathf.RoundToInt(delaySeconds * targetFPS);
-
-                // C. If the buffer is full enough, release the oldest frame
-                if (frameBuffer.Count > requiredFrameCount)
-                {
-                    Color32[] oldPixels = frameBuffer.Dequeue();
-                    displayTexture.SetPixels32(oldPixels);
-                    displayTexture.Apply();
-                }
+                UpdateAspectRatio();
             }
-            else
+
+            // --- Existing Delay Logic ---
+            ProcessFrames();
+        }
+    }
+
+    // This function calculates the correct shape based on the camera hardware
+    public void UpdateAspectRatio()
+    {
+        float aspectRatio = (float)webcam.width / (float)webcam.height;
+        
+        // Scale Y is controlled by viewSize
+        // Scale X is calculated: Height * AspectRatio
+        transform.localScale = new Vector3(viewSize * aspectRatio, viewSize, 1f);
+        
+        isRatioSet = true;
+        Debug.Log($"Camera Resolution: {webcam.width}x{webcam.height}. Aspect Ratio: {aspectRatio}");
+    }
+
+    // Called automatically when you change values in Inspector
+    void OnValidate()
+    {
+        // Allows you to adjust the slider in real-time while playing
+        if (webcam != null && webcam.isPlaying)
+        {
+            UpdateAspectRatio();
+        }
+    }
+
+    void ProcessFrames()
+    {
+        Color32[] currentPixels = webcam.GetPixels32();
+
+        if (useDelay)
+        {
+            frameBuffer.Enqueue(currentPixels);
+            int requiredFrameCount = Mathf.RoundToInt(delaySeconds * targetFPS);
+
+            if (frameBuffer.Count > requiredFrameCount)
             {
-                // Synchronous Mode: Direct pass-through
-                displayTexture.SetPixels32(currentPixels);
+                displayTexture.SetPixels32(frameBuffer.Dequeue());
                 displayTexture.Apply();
-
-                // Clear the buffer so we don't have "stale" frames when we switch back
-                if (frameBuffer.Count > 0) frameBuffer.Clear();
             }
+        }
+        else
+        {
+            displayTexture.SetPixels32(currentPixels);
+            displayTexture.Apply();
+            if (frameBuffer.Count > 0) frameBuffer.Clear();
         }
     }
 
