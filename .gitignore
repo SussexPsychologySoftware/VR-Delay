@@ -264,3 +264,5 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/jetbrains,rider,unity,windows
 
 .idea
+Assets/StreamingAssets/Data/*
+!Assets/StreamingAssets/Data/.gitkeep
