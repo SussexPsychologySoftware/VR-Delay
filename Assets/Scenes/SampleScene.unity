@@ -1207,7 +1207,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: afb4512dfdde435ea9982f7c18d97028, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  deviceName: Terra HD1080PC Camera
+  deviceName: 
   viewSize: 0.45
   fixAspectRatio: 1
   useDelay: 0
@@ -1989,7 +1989,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   participantID: test01
-  sessionNumber: 1
   webcamDisplay: {fileID: 1582580840}
   isRecording: 1
 --- !u!4 &2018943630
