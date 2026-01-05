@@ -2309,10 +2309,12 @@ MonoBehaviour:
   webcamScript: {fileID: 1582580840}
   screenObject: {fileID: 1582580839}
   audioSource: {fileID: 0}
+  experimenterDisplay: {fileID: 16905136}
   participantID: test01
   stimulationDuration: 5
   delay: 0.86
   ISI: 1
+  blocks: 1
 --- !u!4 &2018943630
 Transform:
   m_ObjectHideFlags: 0
