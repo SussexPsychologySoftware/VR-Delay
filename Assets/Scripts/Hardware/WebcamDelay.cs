@@ -68,7 +68,7 @@ public class WebcamDelay : MonoBehaviour
         transform.localScale = new Vector3(viewSize * aspectRatio, viewSize, 1f);
         
         isRatioSet = true;
-        Debug.Log($"Camera Resolution: {webcam.width}x{webcam.height}. Aspect Ratio: {aspectRatio}");
+        //Debug.Log($"Camera Resolution: {webcam.width}x{webcam.height}. Aspect Ratio: {aspectRatio}");
     }
 
     // Called automatically when you change values in Inspector

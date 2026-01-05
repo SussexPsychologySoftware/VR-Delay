@@ -2002,9 +2002,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 94c6068cdb0942e39faffe4735e7fa50, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  webcamScript: {fileID: 1582580840}
+  screenObject: {fileID: 1582580839}
+  audioSource: {fileID: 0}
   participantID: test01
-  webcamDisplay: {fileID: 1582580840}
-  isRecording: 1
+  stimulationDuration: 5
+  delay: 0.86
+  ISI: 1
 --- !u!4 &2018943630
 Transform:
   m_ObjectHideFlags: 0

@@ -2,80 +2,122 @@
 using System.IO;
 using System.Text;
 using System;
+using System.Collections;
 
 public class ExperimentManager : MonoBehaviour
 {
-    [Header("Session Setup")]
+    [Header("Components")]
+    public WebcamDelay webcamScript;      // Drag the Quad/Script here
+    public GameObject screenObject;       // Drag the Quad GameObject here (to turn it on/off)
+    public AudioSource audioSource;       // For beeps (Start/Stop cues)
+
+    [Header("ID")]
     public string participantID = "test01";
-
-    [Header("Experiment State")]
-    public WebcamDelay webcamDisplay; // Drag your Webcam Quad here
-    public bool isRecording = false;
-
+    
+    [Header("Experiment Settings")]
+    public float stimulationDuration = 60.0f; // Standard RHI time
+    public float delay = 0.86f;
+    public float ISI = 1.0f;
+    
+    // Internal State
     private string savePath;
     private StringBuilder csvData = new StringBuilder();
     private float startTime;
+    private bool isRunning = false;
 
     void Start()
     {
         SetupDataFile();
+        // Start with screen OFF so participant sees nothing
+        screenObject.SetActive(false);
     }
 
     void SetupDataFile()
     {
-        // 1. Create Folder: StreamingAssets/Data/participantID/
+        // Create Folder: StreamingAssets/Data/participantID/
         string folder = Path.Combine(Application.streamingAssetsPath, "Data", participantID);
         if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
 
-        // 2. Create File: Session_1_Date_Time.csv
+        // Create file
         string fileName = $"{DateTime.Now:yyyy-MM-dd_HH-mm}.csv";
         savePath = Path.Combine(folder, fileName);
 
-        // 3. Write Headers
+        // Write Headers
         csvData.AppendLine("Timestamp,Event,Value,Delay_State");
         File.WriteAllText(savePath, csvData.ToString());
 
         startTime = Time.time;
-        LogEvent("System", "Experiment_Started");
-        Debug.Log($"<color=green>Data logging to: {savePath}</color>");
-    }
-
-    public void LogEvent(string eventType, string value)
-    {
-        float timestamp = Time.time - startTime;
-        string delayState = webcamDisplay.useDelay ? "Asynchronous" : "Synchronous";
+        //LogEvent("System", "Experiment_Started");
         
-        // Format: 12.435, Trigger, Start_Trial, Asynchronous
-        string row = $"{timestamp:F3},{eventType},{value},{delayState}";
-        
-        // Save to memory and disk
-        csvData.AppendLine(row);
-        File.AppendAllText(savePath, row + "\n");
+        Debug.Log($"<color=green>Ready. Press 'S' for Sync, 'A' for Async.</color>");    
     }
-
+    
     // --- EXPERIMENT CONTROL EXAMPLES ---
 
     void Update()
     {
-        // Example: Press 'S' to start Synchronous Condition
-        if (Input.GetKeyDown(KeyCode.S))
+        if (!isRunning)
         {
-            SetCondition(false); // No Delay
-            LogEvent("Condition_Start", "Synchronous");
-        }
-
-        // Example: Press 'A' to start Asynchronous Condition
-        if (Input.GetKeyDown(KeyCode.A))
-        {
-            SetCondition(true); // Delay
-            LogEvent("Condition_Start", "Asynchronous");
+            if (Input.GetKeyDown(KeyCode.S)) StartCoroutine(RunTrial(false)); // Sync
+            if (Input.GetKeyDown(KeyCode.A)) StartCoroutine(RunTrial(true));  // Async
         }
     }
-
-    public void SetCondition(bool useDelay)
+    
+    // Timeline of trial
+    IEnumerator RunTrial(bool isAsync)
     {
-        webcamDisplay.useDelay = useDelay;
-        // If async, set 1.0s delay. If sync, set 0s.
-        webcamDisplay.delaySeconds = useDelay ? 1.0f : 0f; 
+        // Setup Trial
+        isRunning = true;
+        string conditionName = isAsync ? "Asynchronous" : "Synchronous";
+        
+        // Setup Delay
+        // Note: e.g. 0.86s + 0.14s intrinsic = 1.0s total delay
+        float delayVal = isAsync ? delay : 0f; 
+        webcamScript.delaySeconds = delayVal;
+        webcamScript.useDelay = isAsync;
+
+        LogData("Trial_Start", conditionName, "Intention");
+
+        // Start trial
+        // Inter-Stimulus-interval
+        yield return new WaitForSeconds(ISI);
+
+        // START STIMULATION
+        PlayBeep(); // Audio cue for Researcher to start stroking
+        screenObject.SetActive(true); // Screen ON
+        LogData("Stimulation", conditionName, "Visuals_On");
+
+        // Wait for trial
+        // We use a loop here so we can cancel it if something goes wrong
+        float timer = 0;
+        while (timer < stimulationDuration)
+        {
+            timer += Time.deltaTime;
+            yield return null;
+        }
+
+        // STOP Trial
+        screenObject.SetActive(false); // Screen OFF
+        PlayBeep(); // Audio cue for Researcher to stop
+        LogData("Stimulation_End", conditionName, "Visuals_Off");
+
+        // QUESTIONNAIRE PHASE (Placeholder for now)
+        //Debug.Log("Show Questionnaire Now...");
+        
+        isRunning = false;
+    }
+
+    void LogData(string phase, string condition, string ev)
+    {
+        float t = Time.time - startTime;
+        string row = $"{t:F3},{phase},{condition},{ev}";
+        
+        csvData.AppendLine(row);
+        File.AppendAllText(savePath, row + "\n");
+    }
+
+    void PlayBeep()
+    {
+        if(audioSource) audioSource.Play();
     }
 }
