@@ -16,7 +16,7 @@ public class WebcamDelay : MonoBehaviour
     [Range(0f, 5f)] public float delaySeconds = 1.0f;
 
     [Header("Performance")]
-    public int targetFPS = 30;
+    public int targetFPS = 50;
 
     // Internal
     private WebCamTexture webcam;
