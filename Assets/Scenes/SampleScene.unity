@@ -1209,7 +1209,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   deviceName: 
-  viewSize: 0.57
+  viewSize: 0.65
   fixAspectRatio: 1
   useDelay: 0
   delaySeconds: 2
