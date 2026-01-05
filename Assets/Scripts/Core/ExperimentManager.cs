@@ -14,6 +14,11 @@ public class ExperimentManager : MonoBehaviour
     public AudioSource audioSource;       // For beeps (Start/Stop cues)
     public TMP_Text experimenterDisplay;
     
+    [Header("UI & Input")]
+    public QuestionnaireManager questionnaireScript; // Drag the new script here
+    public GameObject leftHandController; // Drag XR Origin > LeftHand Controller
+    public GameObject rightHandController; // Drag XR Origin > RightHand Controller
+    
     [Header("ID")]
     public string participantID = "test01";
     
@@ -172,10 +177,30 @@ public class ExperimentManager : MonoBehaviour
         PlayBeep(); // Audio cue for Researcher to stop
         LogData("Stimulation_End", trial.id, trial.isActive ? "Active" : "Passive", "Visuals_Off");
         
-        // QUESTIONNAIRE PHASE (Placeholder for now)
-        UpdateExperimenterUI("Questionnaire Phase... (Press Space for next trial)");
-        
+        // QUESTIONNAIRE PHASE
+        UpdateExperimenterUI("Waiting for Participant Input...");
+
+        // A. Turn on Lasers so they can click
+        SetControllersActive(true);
+
+        // B. Show UI and Wait
+        bool answered = false;
+        questionnaireScript.ShowQuestionnaire((resultString) => 
+        {
+            // This runs when they click "Submit"
+            LogData("Questionnaire", trial.id, "Results", resultString);
+            answered = true;
+        });
+
+        // C. Pause Coroutine until they answer
+        yield return new WaitUntil(() => answered);
+
+        // D. Turn off Lasers for the next trial
+        SetControllersActive(false);
+
+        UpdateExperimenterUI("Trial Complete. Press SPACE for next.");
         isRunning = false;
+
     }
     
     void UpdateExperimenterUI(string message)
@@ -194,5 +219,12 @@ public class ExperimentManager : MonoBehaviour
     void PlayBeep()
     {
         if(audioSource) audioSource.Play();
+    }
+    
+    // Toggles controller lazers
+    void SetControllersActive(bool isActive)
+    {
+        leftHandController.SetActive(isActive);
+        rightHandController.SetActive(isActive);
     }
 }
