@@ -9,19 +9,43 @@ using UnityEngine.XR.Interaction.Toolkit;
 
 public class ExperimentManager : MonoBehaviour
 {
+    public enum ExperimentPhase { Threshold, Long }
+    
+    [System.Serializable]
+    public class TrialData
+    {
+        public string id;             // e.g. "Threshold_66ms"
+        public ExperimentPhase phase; // Threshold or Long
+        public bool isSelf;           // True = Participant strokes, False = Researcher strokes
+        public float delay;      // In seconds (e.g. 0.066)
+        public float duration;        // 7s or 60s
+    }
+    
     [Header("Components")]
     public WebcamDelay webcamScript;      // Drag the Quad/Script here
     public GameObject screenObject;       // Drag the Quad GameObject here (to turn it on/off)
     public AudioSource audioSource;       // For beeps (Start/Stop cues)
-    public TMP_Text experimenterDisplay;
+    public TMP_Text experimenterDisplay;  // Provide notes to researchers on pc screen
     
     [Header("UI & Input")]
     public QuestionnaireManager questionnaireScript; // Drag the new script here
+    public GameObject thresholdUI;
     public GameObject leftHandController; // Drag XR Origin > LeftHand Controller
     public GameObject rightHandController; // Drag XR Origin > RightHand Controller
     
-    [Header("ID")]
+    [Header("Participant Settings")]
     public string participantID = "test01";
+    public bool startWithSelf = true;     // Toggle this to counterbalance order
+
+    [Header("Experiment Settings")] 
+    public float maxThresholdDelay = 0.594f;
+    public int nThresholdSteps = 10; // Includes 0! i.e. 594/10 = stepSize=66ms
+    public float estimatedSystemLatency = 0.1f;
+    public float longAsyncTargetDelay = 1.0f; // Target for Long Asynchronous trials (e.g. 1.0s)
+    public float thresholdDuration = 7.0f;
+    public float longDuration = 60.0f;
+    public float ISI = 1.0f;
+    public int thresholdRepetitions = 4;
     
     [System.Serializable]
     public struct TrialType
@@ -32,200 +56,233 @@ public class ExperimentManager : MonoBehaviour
         public string instructions; // Message for the Experimenter
     }
     
-    private List<TrialType> trialStack = new List<TrialType>();
-    
-    [Header("Experiment Settings")]
-    public float stimulationDuration = 60.0f; // Standard RHI time
-    public float delay = 0.86f;
-    public float ISI = 1.0f;
-    public int blocks = 1; // How many times to do each of the 4 types?
-    
     // Internal State
+    private List<TrialData> trialStack = new List<TrialData>();
     private string savePath;
     private StringBuilder csvData = new StringBuilder();
     private float startTime;
     private bool isRunning = false;
-    private TrialType currentTrial;
+    private TrialData currentTrial;
     
     void Start()
     {
         SetupDataFile();
-        GenerateRandomBlocks();
-        // Start with screen OFF so participant sees nothing
+        GenerateAllTrials(startWithSelf);
+        
         screenObject.SetActive(false);
-        UpdateExperimenterUI("READY. Press SPACE to start next trial.");
+        if(thresholdUI) thresholdUI.SetActive(false);
+        
+        UpdateExperimenterUI($"READY ({trialStack.Count} trials).\nSystem Latency: {estimatedSystemLatency*1000:F0}ms\nPress SPACE to begin.");
     }
 
     void SetupDataFile()
     {
-        // Create Folder: StreamingAssets/Data/participantID/
         string folder = Path.Combine(Application.streamingAssetsPath, "Data", participantID);
         if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
 
-        // Create file
-        string fileName = $"{DateTime.Now:yyyy-MM-dd_HH-mm}.csv";
+        string fileName = $"{participantID}_{DateTime.Now:yyyy-MM-dd_HH-mm}.csv";
         savePath = Path.Combine(folder, fileName);
 
-        // Write Headers
-        csvData.AppendLine("Timestamp,Event,Value,Delay_State");
+        csvData.AppendLine("Timestamp,Phase,Condition,TargetDelay,AppliedDelay,Event,Value");
         File.WriteAllText(savePath, csvData.ToString());
 
         startTime = Time.time;
-        //LogEvent("System", "Experiment_Started");
-        
-        Debug.Log($"<color=green>Ready. Press 'S' for Sync, 'A' for Async.</color>");    
     }
     
-    void GenerateRandomBlocks()
+    void GenerateAllTrials(bool selfFirst)
     {
-        // 1. Define the 4 Fundamental Conditions
-        var conditions = new List<TrialType>
+        if (selfFirst)
         {
-            new TrialType { id="Sync_Passive", isAsync=false, isActive=false, instructions="RESEARCHER" },
-            new TrialType { id="Async_Passive", isAsync=true, isActive=false, instructions="RESEARCHER" },
-            new TrialType { id="Sync_Active", isAsync=false, isActive=true, instructions="PARTICIPANT" },
-            new TrialType { id="Async_Active", isAsync=true, isActive=true, instructions="PARTICIPANT" }
-        };
-
-        // Multiply by repetitions
-        for (int i = 0; i < blocks; i++)
+            AddThresholdBlock(true);  
+            AddThresholdBlock(false); 
+            AddLongBlock(true);       
+            AddLongBlock(false);      
+        }
+        else
         {
-            trialStack.AddRange(conditions);
+            AddThresholdBlock(false); 
+            AddThresholdBlock(true);  
+            AddLongBlock(false);      
+            AddLongBlock(true);       
         }
 
-        // Fisher-Yates Shuffle (Randomize)
-        for (int i = 0; i < trialStack.Count; i++)
-        {
-            TrialType temp = trialStack[i];
-            int randomIndex = UnityEngine.Random.Range(i, trialStack.Count);
-            trialStack[i] = trialStack[randomIndex];
-            trialStack[randomIndex] = temp;
-        }
-
-        Debug.Log($"Generated {trialStack.Count} trials in random order.");
+        Debug.Log($"Generated Total: {trialStack.Count} trials.");
     }
     
-    // --- EXPERIMENT CONTROL EXAMPLES ---
+    void AddThresholdBlock(bool isSelf)
+    {
+        List<TrialData> blockTrials = new List<TrialData>();
 
+        float stepSize = maxThresholdDelay / (nThresholdSteps-1);
+        
+        for (int i = 0; i < nThresholdSteps; i++)
+        {
+            // NOTE: haven't added system delay to threshold delay
+            float rawAddedDelay = i * stepSize;
+
+            for (int r = 0; r < thresholdRepetitions; r++)
+            {
+                blockTrials.Add(new TrialData
+                {
+                    id = $"Threshold_+{Mathf.RoundToInt(rawAddedDelay * 1000)}ms",
+                    phase = ExperimentPhase.Threshold,
+                    isSelf = isSelf,
+                    delay = rawAddedDelay, 
+                    duration = thresholdDuration
+                });
+            }
+        }
+        Shuffle(blockTrials);
+        trialStack.AddRange(blockTrials);
+    }
+    
+    void AddLongBlock(bool isSelf)
+    {
+        List<TrialData> blockTrials = new List<TrialData>();
+
+        // Sync Condition (instant)
+        blockTrials.Add(new TrialData { 
+            id="Long_Sync", 
+            phase=ExperimentPhase.Long, 
+            isSelf=isSelf, 
+            delay=0.0f, 
+            duration=longDuration 
+        });
+
+        // Async Condition:
+        // Target is 1.0 second TOTAL (System + Artificial).
+        blockTrials.Add(new TrialData { 
+            id="Long_Async", 
+            phase=ExperimentPhase.Long, 
+            isSelf=isSelf, 
+            delay=longAsyncTargetDelay, 
+            duration=longDuration 
+        });
+
+        Shuffle(blockTrials);
+        trialStack.AddRange(blockTrials);
+    }
+    
     void Update()
     {
-        // Single Key to advance everything
         if (!isRunning && trialStack.Count > 0)
         {
             if (Input.GetKeyDown(KeyCode.Space))
             {
-                // Pop the next trial from the list
                 currentTrial = trialStack[0];
                 trialStack.RemoveAt(0);
-                
                 StartCoroutine(RunTrial(currentTrial));
             }
         }
         else if (!isRunning && trialStack.Count == 0)
         {
-            UpdateExperimenterUI("SESSION COMPLETE.");
+            UpdateExperimenterUI("EXPERIMENT COMPLETE.");
         }
-        // if (!isRunning)
-        // {
-        //     if (Input.GetKeyDown(KeyCode.S)) StartCoroutine(RunTrial(false)); // Sync
-        //     if (Input.GetKeyDown(KeyCode.A)) StartCoroutine(RunTrial(true));  // Async
-        // }
     }
     
     // Timeline of trial
-    IEnumerator RunTrial(TrialType trial)
+    IEnumerator RunTrial(TrialData trial)
     {
-        // Setup Trial
         isRunning = true;
-        // PREPARE (Experimenter sees instruction, Screen still OFF)
-        string mode = trial.isAsync ? "ASYNC (Delay)" : "SYNC (Instant)";
-        UpdateExperimenterUI($"NEXT: {mode} \n {trial.instructions} \n\n Press 'R' when ready to start.");
-        
-        // Wait for Experimenter to confirm they are ready (e.g. have picked up brush)
-        yield return new WaitUntil(() => Input.GetKeyDown(KeyCode.R));
-        
-        // Setup Delay
-        // Note: e.g. 0.86s + 0.14s intrinsic = 1.0s total delay
-        float appliedDelay = trial.isAsync ? delay : 0f; 
-        webcamScript.delaySeconds = appliedDelay;
-        webcamScript.useDelay = trial.isAsync;
+        float appliedDelay = 0f;
 
-        LogData("Trial_Start", trial.id, trial.isActive ? "Active" : "Passive", "Intention");
+        if (trial.phase == ExperimentPhase.Threshold)
+        {
+            appliedDelay = trial.delay;
+        }
+        else
+        {
+            // LONG: We want a specific TOTAL experience (Target).
+            // Applied = Target - System
+            appliedDelay = Mathf.Max(0f, trial.delay - estimatedSystemLatency);
+        }
+        
+        webcamScript.delaySeconds = appliedDelay;
+        webcamScript.useDelay = (appliedDelay > 0.001f); 
+
+        // UI Updates
+        string actor = trial.isSelf ? "PARTICIPANT strokes" : "RESEARCHER strokes";
+        string timeMsg = trial.phase == ExperimentPhase.Threshold ? "THRESHOLD" : "LONG";
+        
+        UpdateExperimenterUI($"NEXT: {trial.id} ({timeMsg})\nParam: {trial.delay:F2}s | Applied: {appliedDelay:F2}s\n{actor}\n\nPress 'R' when ready.");
+        yield return new WaitUntil(() => Input.GetKeyDown(KeyCode.R));  //NOTE uncomment to run trials automatically
+
+        LogData(trial, appliedDelay, "Trial_Start", "Intention");
         UpdateExperimenterUI("Running...");
         
-        // Start trial
-        // Inter-Stimulus-interval
         yield return new WaitForSeconds(ISI);
-
-        // START STIMULATION
-        PlayBeep(); // Audio cue for Researcher to start stroking
-        screenObject.SetActive(true); // Screen ON
-        LogData("Stimulation_Start", trial.id, trial.isActive ? "Active" : "Passive", "Visuals_On");
         
-        // Wait for trial
-        // We use a loop here so we can cancel it if something goes wrong
+        PlayBeep(); 
+        screenObject.SetActive(true);
+        LogData(trial, appliedDelay, "Stimulation_Start", "Visuals_On");
+
         float timer = 0;
-        while (timer < stimulationDuration)
+        while (timer < trial.duration)
         {
             timer += Time.deltaTime;
-            // Optional: Update UI countdown for experimenter
-            UpdateExperimenterUI($"{trial.id}\nTime: {stimulationDuration - timer:F1}");
+            UpdateExperimenterUI($"{trial.id}\n{trial.duration - timer:F1}s");
+            if(Input.GetKeyDown(KeyCode.Escape)) { screenObject.SetActive(false); isRunning=false; yield break; }
             yield return null;
         }
 
-        // STOP Trial
-        screenObject.SetActive(false); // Screen OFF
-        PlayBeep(); // Audio cue for Researcher to stop
-        LogData("Stimulation_End", trial.id, trial.isActive ? "Active" : "Passive", "Visuals_Off");
-        
-        // QUESTIONNAIRE PHASE
-        UpdateExperimenterUI("Waiting for Participant Input...");
+        screenObject.SetActive(false);
+        PlayBeep();
+        LogData(trial, appliedDelay, "Stimulation_End", "Visuals_Off");
 
-        // A. Turn on Lasers so they can click
+        // QUESTIONNAIRE LOGIC
+        UpdateExperimenterUI("Waiting for Response...");
         SetControllersActive(true);
 
-        // B. Show UI and Wait
-        bool answered = false;
+        if (trial.phase == ExperimentPhase.Threshold)
+        {
+            // Binary Question
+            if(thresholdUI) thresholdUI.SetActive(true);
+            
+            // Wait for input (Keyboard Y/N for now, mapped to VR buttons later)
+            yield return new WaitUntil(() => Input.GetKeyDown(KeyCode.Y) || Input.GetKeyDown(KeyCode.N));
+            string binaryResult = Input.GetKeyDown(KeyCode.Y) ? "Yes" : "No";
+            
+            LogData(trial, appliedDelay, "Question_Binary", binaryResult);
+            if(thresholdUI) thresholdUI.SetActive(false);
+
+            // TODO: Call questionnaireScript.ShowThresholdQuestions() here
+        }
+        else
+        {
+            // TODO: Call questionnaireScript.ShowFullQuestions() here
+        }
+
+        bool qAnswered = false;
+        // Generic callback that works for whichever questionnaire is currently active
         questionnaireScript.ShowQuestionnaire((resultString) => 
         {
-            // This runs when they click "Submit"
-            LogData("Questionnaire", trial.id, "Results", resultString);
-            answered = true;
+            LogData(trial, appliedDelay, "Questionnaire_Results", resultString);
+            qAnswered = true;
         });
 
-        // C. Pause Coroutine until they answer
-        yield return new WaitUntil(() => answered);
+        yield return new WaitUntil(() => qAnswered);
 
-        // D. Turn off Lasers for the next trial
-        SetControllersActive(false);
-
-        UpdateExperimenterUI("Trial Complete. Press SPACE for next.");
+        SetControllersActive(false); 
+        UpdateExperimenterUI("Trial Done. Press SPACE.");
         isRunning = false;
-
-    }
+    }  
     
-    void UpdateExperimenterUI(string message)
+    void LogData(TrialData t, float applied, string ev, string val)
     {
-        if (experimenterDisplay != null) experimenterDisplay.text = message;
-    }
-
-    void LogData(string phase, string condition, string mode, string ev)
-    {
-        float t = Time.time - startTime;
-        string row = $"{t:F3},{phase},{condition},{mode},{ev}";
+        string row = $"{Time.time - startTime:F3},{t.phase},{t.isSelf},{t.delay:F3},{applied:F3},{ev},{val}";
         csvData.AppendLine(row);
         File.AppendAllText(savePath, row + "\n");
     }
 
-    void PlayBeep()
-    {
-        if(audioSource) audioSource.Play();
-    }
-    
-    // Toggles controller lazers
+    void UpdateExperimenterUI(string message) { if (experimenterDisplay != null) experimenterDisplay.text = message; }
+    void PlayBeep() { if(audioSource) audioSource.Play(); }
     void SetControllersActive(bool isActive)
     {
-        leftHandController.SetActive(isActive);
-        rightHandController.SetActive(isActive);
+        if(leftHandController) leftHandController.SetActive(isActive);
+        if(rightHandController) rightHandController.SetActive(isActive);
+    }
+    void Shuffle<T>(List<T> list)
+    {
+        for (int i = 0; i < list.Count; i++) { T temp = list[i]; int r = UnityEngine.Random.Range(i, list.Count); list[i] = list[r]; list[r] = temp; }
     }
 }
