@@ -207,7 +207,7 @@ public class ExperimentManager : MonoBehaviour
         string actor = trial.isSelf ? "PARTICIPANT" : "RESEARCHER";
         string phase = trial.phase == ExperimentPhase.Threshold ? "THRESHOLD" : "LONG";
         
-        UpdateExperimenterUI($"Phase: {phase}\nNext actor: {actor}\n\nPress 'R' when ready.");
+        UpdateExperimenterUI($"Phase: {phase}\n\nNext actor: {actor}\n\nPress 'R' when ready.");
         yield return new WaitUntil(() => Input.GetKeyDown(KeyCode.R));  //NOTE uncomment to run trials automatically
 
         LogData(trial, appliedDelay, "Trial_Start", "Intention");
