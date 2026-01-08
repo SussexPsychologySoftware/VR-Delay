@@ -17,7 +17,7 @@ public class ExperimentManager : MonoBehaviour
         public string id;             // e.g. "Threshold_66ms"
         public ExperimentPhase phase; // Threshold or Long
         public bool isSelf;           // True = Participant strokes, False = Researcher strokes
-        public float delay;      // In seconds (e.g. 0.066)
+        public int delay;             // In milliseconds
         public float duration;        // 7s or 60s
     }
     
@@ -37,15 +37,15 @@ public class ExperimentManager : MonoBehaviour
     public string participantID = "test01";
     public bool startWithSelf = true;     // Toggle this to counterbalance order
 
-    [Header("Experiment Settings")] 
-    public float maxThresholdDelay = 0.594f;
+    [Header("Experiment Settings (milliseconds)")] 
+    public int maxThresholdDelay = 594;
     public int nThresholdSteps = 10; // Includes 0! i.e. 594/10 = stepSize=66ms
-    public float estimatedSystemLatency = 0.1f;
-    public float longAsyncTargetDelay = 1.0f; // Target for Long Asynchronous trials (e.g. 1.0s)
-    public float thresholdDuration = 7.0f;
-    public float longDuration = 60.0f;
-    public float ISI = 1.0f;
+    public int longAsyncTargetDelay = 1000; // Target for Long Asynchronous trials (e.g. 1.0s)
+    public int thresholdDuration = 7000;
+    public int longDuration = 60000;
+    public int ISI = 1000;
     public int thresholdRepetitions = 4;
+    public float estimatedSystemLatency = 0.134f;
     
     [System.Serializable]
     public struct TrialType
@@ -112,22 +112,23 @@ public class ExperimentManager : MonoBehaviour
     void AddThresholdBlock(bool isSelf)
     {
         List<TrialData> blockTrials = new List<TrialData>();
+        string ownerLabel = isSelf ? "Self" : "Other";
 
-        float stepSize = maxThresholdDelay / (nThresholdSteps-1);
+        int stepSize = maxThresholdDelay / (nThresholdSteps-1);
         
         for (int i = 0; i < nThresholdSteps; i++)
         {
             // NOTE: haven't added system delay to threshold delay
-            float rawAddedDelay = i * stepSize;
+            int trialDelay = i * stepSize;
 
             for (int r = 0; r < thresholdRepetitions; r++)
             {
                 blockTrials.Add(new TrialData
                 {
-                    id = $"Threshold_+{Mathf.RoundToInt(rawAddedDelay * 1000)}ms",
+                    id = $"Threshold_{ownerLabel}_{trialDelay}ms_{(r+1)}",
                     phase = ExperimentPhase.Threshold,
                     isSelf = isSelf,
-                    delay = rawAddedDelay, 
+                    delay = trialDelay, 
                     duration = thresholdDuration
                 });
             }
@@ -139,20 +140,21 @@ public class ExperimentManager : MonoBehaviour
     void AddLongBlock(bool isSelf)
     {
         List<TrialData> blockTrials = new List<TrialData>();
-
+        string ownerLabel = isSelf ? "Self" : "Other";
+        
         // Sync Condition (instant)
         blockTrials.Add(new TrialData { 
-            id="Long_Sync", 
+            id=$"Long_Sync_{ownerLabel}", 
             phase=ExperimentPhase.Long, 
             isSelf=isSelf, 
-            delay=0.0f, 
+            delay=0, 
             duration=longDuration 
         });
 
         // Async Condition:
         // Target is 1.0 second TOTAL (System + Artificial).
         blockTrials.Add(new TrialData { 
-            id="Long_Async", 
+            id=$"Long_Async_{ownerLabel}", 
             phase=ExperimentPhase.Long, 
             isSelf=isSelf, 
             delay=longAsyncTargetDelay, 
@@ -185,16 +187,17 @@ public class ExperimentManager : MonoBehaviour
     {
         isRunning = true;
         float appliedDelay = 0f;
-
+        float targetDelaySeconds = trial.delay / 1000f;
+        
         if (trial.phase == ExperimentPhase.Threshold)
         {
-            appliedDelay = trial.delay;
+            appliedDelay = targetDelaySeconds;
         }
         else
         {
             // LONG: We want a specific TOTAL experience (Target).
             // Applied = Target - System
-            appliedDelay = Mathf.Max(0f, trial.delay - estimatedSystemLatency);
+            appliedDelay = Mathf.Max(0f, targetDelaySeconds - estimatedSystemLatency);
         }
         
         webcamScript.delaySeconds = appliedDelay;
