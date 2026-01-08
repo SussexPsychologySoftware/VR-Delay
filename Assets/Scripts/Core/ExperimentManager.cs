@@ -72,7 +72,7 @@ public class ExperimentManager : MonoBehaviour
         screenObject.SetActive(false);
         if(thresholdUI) thresholdUI.SetActive(false);
         
-        UpdateExperimenterUI($"READY ({trialStack.Count} trials).\nSystem Latency: {estimatedSystemLatency*1000:F0}ms\nPress SPACE to begin.");
+        UpdateExperimenterUI($"Press SPACE to begin.");
     }
 
     void SetupDataFile()
@@ -201,10 +201,10 @@ public class ExperimentManager : MonoBehaviour
         webcamScript.useDelay = (appliedDelay > 0.001f); 
 
         // UI Updates
-        string actor = trial.isSelf ? "PARTICIPANT strokes" : "RESEARCHER strokes";
-        string timeMsg = trial.phase == ExperimentPhase.Threshold ? "THRESHOLD" : "LONG";
+        string actor = trial.isSelf ? "PARTICIPANT" : "RESEARCHER";
+        string phase = trial.phase == ExperimentPhase.Threshold ? "THRESHOLD" : "LONG";
         
-        UpdateExperimenterUI($"NEXT: {trial.id} ({timeMsg})\nParam: {trial.delay:F2}s | Applied: {appliedDelay:F2}s\n{actor}\n\nPress 'R' when ready.");
+        UpdateExperimenterUI($"Phase: {phase}\nNext actor: {actor}\n\nPress 'R' when ready.");
         yield return new WaitUntil(() => Input.GetKeyDown(KeyCode.R));  //NOTE uncomment to run trials automatically
 
         LogData(trial, appliedDelay, "Trial_Start", "Intention");
