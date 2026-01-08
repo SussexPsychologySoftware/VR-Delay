@@ -8,16 +8,14 @@ using TMPro;
 public class QuestionnaireManager : MonoBehaviour
 {
     [Header("UI Containers")]
-    public GameObject longPanel;
     public GameObject thresholdPanel;
+    public GameObject longPanel;
     
-    [Header("Full Questionnaire Elements")]
-    public Slider[] fullSliders;
-    
-    [Header("Threshold Questionnaire Elements")]
+    [Header("Questionnaire Elements")]
     public Slider[] thresholdSliders;  // Drag the 2 sliders here (Ownership, Pleasantness)
     public Button yesButton;           // Drag the 'YES' button
     public Button noButton;            // Drag the 'NO' button
+    public Slider[] longSliders;
     
     // Internal State
     private Action<string> onCompleteCallback;
@@ -39,7 +37,7 @@ public class QuestionnaireManager : MonoBehaviour
     {
         onCompleteCallback = callback;
         
-        ResetSliders(fullSliders);
+        ResetSliders(longSliders);
 
         longPanel.SetActive(true);
         thresholdPanel.SetActive(false);
@@ -61,11 +59,11 @@ public class QuestionnaireManager : MonoBehaviour
     
     // --- HELPER METHODS ---
 
-    public void SubmitFull()
+    public void SubmitLong()
     {
         // 1. Collect Data (9 columns)
         StringBuilder sb = new StringBuilder();
-        foreach (Slider s in fullSliders)
+        foreach (Slider s in longSliders)
         {
             sb.Append(s.value.ToString("F3") + ",");
         }
