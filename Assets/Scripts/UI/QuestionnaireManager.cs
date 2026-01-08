@@ -4,6 +4,7 @@ using System;
 using System.Text;
 using System.Collections.Generic;
 using TMPro;
+using System.Collections;
 
 public class QuestionnaireManager : MonoBehaviour
 {
@@ -36,25 +37,23 @@ public class QuestionnaireManager : MonoBehaviour
     public void ShowLongQuestionnaire(Action<string> callback)
     {
         onCompleteCallback = callback;
-        
-        ResetSliders(longSliders);
-
         longPanel.SetActive(true);
         thresholdPanel.SetActive(false);
+        ResetSliders(longSliders);
     }
     
     public void ShowThresholdQuestionnaire(Action<string> callback)
     {
         onCompleteCallback = callback;
 
+        // Show Panel
+        thresholdPanel.SetActive(true);
+        longPanel.SetActive(false);
+        
         // Reset UI
         ResetSliders(thresholdSliders);
         binaryAnswer = "NA"; 
         ResetButtonColors();
-
-        // Show Panel
-        thresholdPanel.SetActive(true);
-        longPanel.SetActive(false);
     }
     
     // --- HELPER METHODS ---
@@ -113,7 +112,7 @@ public class QuestionnaireManager : MonoBehaviour
     
     void ResetSliders(Slider[] sliders)
     {
-        foreach (var s in sliders) s.value = 0.5f; // Or 0 if you prefer
+        foreach (var s in sliders) s.value = 0f;
     }
     
     void ResetButtonColors()
