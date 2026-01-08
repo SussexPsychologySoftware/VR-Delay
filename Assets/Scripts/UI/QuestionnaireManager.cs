@@ -1,54 +1,126 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
-using System.Collections.Generic;
+using System;
 using System.Text;
+using System.Collections.Generic;
+using TMPro;
 
 public class QuestionnaireManager : MonoBehaviour
 {
-    [Header("UI Elements")]
-    public GameObject questionnairePanel; // The entire Canvas/Panel
-    public Button submitButton;
-    public List<Slider> questionSliders;  // Drag sliders here
+    [Header("UI Containers")]
+    public GameObject fullPanel;
+    public GameObject thresholdPanel;
     
-    // Callback to tell the main manager questionnaire is finished
-    private System.Action<string> onCompleteCallback;
+    [Header("Full Questionnaire Elements")]
+    public Slider[] fullSliders;
+    
+    [Header("Threshold Questionnaire Elements")]
+    public Slider[] thresholdSliders;  // Drag the 2 sliders here (Ownership, Pleasantness)
+    public Button yesButton;           // Drag the 'YES' button
+    public Button noButton;            // Drag the 'NO' button
+    
+    // Internal State
+    private Action<string> onCompleteCallback;
+    private string binaryAnswer = "NA"; // Stores "Yes" or "No"
 
     void Start()
     {
-        // Setup Submit Button
-        submitButton.onClick.AddListener(SubmitAnswers);
-        
-        // Hide by default
-        questionnairePanel.SetActive(false);
+        // Ensure everything is hidden at start
+        if(fullPanel) fullPanel.SetActive(false);
+        if(thresholdPanel) thresholdPanel.SetActive(false);
+
+        // Setup Binary Button Listeners
+        if (yesButton) yesButton.onClick.AddListener(() => SetBinaryChoice("Yes"));
+        if (noButton)  noButton.onClick.AddListener(() => SetBinaryChoice("No"));
     }
-
-    public void ShowQuestionnaire(System.Action<string> onComplete)
+    
+    // --- PUBLIC METHODS CALLED BY EXPERIMENT MANAGER ---
+    public void ShowFullQuestionnaire(Action<string> callback)
     {
-        onCompleteCallback = onComplete;
+        onCompleteCallback = callback;
         
-        // Reset sliders to 0 (or 0.5 middle)
-        foreach (var slider in questionSliders)
-        {
-            slider.value = 0;
-        }
+        ResetSliders(fullSliders);
 
-        questionnairePanel.SetActive(true);
+        fullPanel.SetActive(true);
+        thresholdPanel.SetActive(false);
     }
-
-    void SubmitAnswers()
+    
+    public void ShowThresholdQuestionnaire(Action<string> callback)
     {
-        // Collect Data
+        onCompleteCallback = callback;
+
+        // Reset UI
+        ResetSliders(thresholdSliders);
+        binaryAnswer = "NA"; 
+        ResetButtonColors();
+
+        // Show Panel
+        thresholdPanel.SetActive(true);
+        fullPanel.SetActive(false);
+    }
+    
+    // --- HELPER METHODS ---
+
+    public void SubmitFull()
+    {
+        // 1. Collect Data (9 columns)
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < questionSliders.Count; i++)
+        foreach (Slider s in fullSliders)
         {
-            // Format: Q1:0.45;Q2:0.12;...
-            sb.Append($"Q{i+1}:{questionSliders[i].value:F2};");
+            sb.Append(s.value.ToString("F3") + ",");
+        }
+        
+        // Remove trailing comma
+        if(sb.Length > 0) sb.Length--;
+
+        // Hide & Callback
+        fullPanel.SetActive(false);
+        onCompleteCallback?.Invoke(sb.ToString());
+    }
+    
+    public void SubmitThreshold()
+    {
+        // Validation: Did they select Yes/No?
+        if (binaryAnswer == "NA")
+        {
+            Debug.LogWarning("Participant must select Yes or No first!");
+            return; // Don't submit yet
         }
 
-        // Hide UI
-        questionnairePanel.SetActive(false);
+        // 1. Collect Data: "Yes,0.54,0.88"
+        string slider1 = thresholdSliders[0].value.ToString("F3");
+        string slider2 = thresholdSliders[1].value.ToString("F3");
+        string result = $"{binaryAnswer},{slider1},{slider2}";
 
-        // Send data back to Experiment Manager
-        onCompleteCallback?.Invoke(sb.ToString());
+        // 2. Hide & Callback
+        thresholdPanel.SetActive(false);
+        onCompleteCallback?.Invoke(result);
+    }
+
+    // --- UI LOGIC ---
+    void SetBinaryChoice(string choice)
+    {
+        binaryAnswer = choice;
+        
+        // Visual Feedback (Highlight selected)
+        Color selectedColor = Color.green;
+        Color normalColor = Color.white;
+
+        var yesImg = yesButton.GetComponent<Image>();
+        var noImg = noButton.GetComponent<Image>();
+
+        if (yesImg) yesImg.color = (choice == "Yes") ? selectedColor : normalColor;
+        if (noImg)  noImg.color = (choice == "No")  ? selectedColor : normalColor;
+    }
+    
+    void ResetSliders(Slider[] sliders)
+    {
+        foreach (var s in sliders) s.value = 0.5f; // Or 0 if you prefer
+    }
+    
+    void ResetButtonColors()
+    {
+        if (yesButton) yesButton.GetComponent<Image>().color = Color.white;
+        if (noButton)  noButton.GetComponent<Image>().color = Color.white;
     }
 }
