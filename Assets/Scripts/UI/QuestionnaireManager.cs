@@ -8,7 +8,7 @@ using TMPro;
 public class QuestionnaireManager : MonoBehaviour
 {
     [Header("UI Containers")]
-    public GameObject fullPanel;
+    public GameObject longPanel;
     public GameObject thresholdPanel;
     
     [Header("Full Questionnaire Elements")]
@@ -26,7 +26,7 @@ public class QuestionnaireManager : MonoBehaviour
     void Start()
     {
         // Ensure everything is hidden at start
-        if(fullPanel) fullPanel.SetActive(false);
+        if(longPanel) longPanel.SetActive(false);
         if(thresholdPanel) thresholdPanel.SetActive(false);
 
         // Setup Binary Button Listeners
@@ -41,7 +41,7 @@ public class QuestionnaireManager : MonoBehaviour
         
         ResetSliders(fullSliders);
 
-        fullPanel.SetActive(true);
+        longPanel.SetActive(true);
         thresholdPanel.SetActive(false);
     }
     
@@ -56,7 +56,7 @@ public class QuestionnaireManager : MonoBehaviour
 
         // Show Panel
         thresholdPanel.SetActive(true);
-        fullPanel.SetActive(false);
+        longPanel.SetActive(false);
     }
     
     // --- HELPER METHODS ---
@@ -74,7 +74,7 @@ public class QuestionnaireManager : MonoBehaviour
         if(sb.Length > 0) sb.Length--;
 
         // Hide & Callback
-        fullPanel.SetActive(false);
+        longPanel.SetActive(false);
         onCompleteCallback?.Invoke(sb.ToString());
     }
     
