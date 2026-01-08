@@ -6864,14 +6864,14 @@ MonoBehaviour:
   rightHandController: {fileID: 1740214639}
   participantID: test01
   startWithSelf: 1
-  maxThresholdDelay: 0.594
-  nThresholdSteps: 1
-  estimatedSystemLatency: 0.1
-  longAsyncTargetDelay: 1
-  thresholdDuration: 7
-  longDuration: 60
-  ISI: 1
+  maxThresholdDelay: 594
+  longAsyncTargetDelay: 1000
+  nThresholdSteps: 10
   thresholdRepetitions: 4
+  thresholdDuration: 7
+  longDuration: 6
+  ISI: 1
+  estimatedSystemLatency: 0.134
 --- !u!4 &2018943630
 Transform:
   m_ObjectHideFlags: 0
