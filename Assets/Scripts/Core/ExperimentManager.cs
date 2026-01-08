@@ -233,36 +233,34 @@ public class ExperimentManager : MonoBehaviour
         UpdateExperimenterUI("Waiting for Response...");
         SetControllersActive(true);
 
+        bool qAnswered = false;
+
+        // CHECK PHASE AND SHOW CORRECT UI
         if (trial.phase == ExperimentPhase.Threshold)
         {
-            // Binary Question
-            if(thresholdUI) thresholdUI.SetActive(true);
-            
-            // Wait for input (Keyboard Y/N for now, mapped to VR buttons later)
-            yield return new WaitUntil(() => Input.GetKeyDown(KeyCode.Y) || Input.GetKeyDown(KeyCode.N));
-            string binaryResult = Input.GetKeyDown(KeyCode.Y) ? "Yes" : "No";
-            
-            LogData(trial, appliedDelay, "Question_Binary", binaryResult);
-            if(thresholdUI) thresholdUI.SetActive(false);
-
-            // TODO: Call questionnaireScript.ShowThresholdQuestions() here
+            // Show the new Threshold Panel (Binary + 2 Sliders)
+            questionnaireScript.ShowThresholdQuestionnaire((resultString) => 
+            {
+                // Result format: "Yes,0.45,0.12"
+                LogData(trial, appliedDelay, "Threshold_Data", resultString);
+                qAnswered = true;
+            });
         }
         else
         {
-            // TODO: Call questionnaireScript.ShowFullQuestions() here
+            // Show the Full Scroll View (9 Sliders)
+            questionnaireScript.ShowFullQuestionnaire((resultString) => 
+            {
+                // Result format: "0.1,0.2,0.3,..."
+                LogData(trial, appliedDelay, "Full_Data", resultString);
+                qAnswered = true;
+            });
         }
 
-        bool qAnswered = false;
-        // Generic callback that works for whichever questionnaire is currently active
-        questionnaireScript.ShowQuestionnaire((resultString) => 
-        {
-            LogData(trial, appliedDelay, "Questionnaire_Results", resultString);
-            qAnswered = true;
-        });
-
+        // Wait here until the callback above sets qAnswered = true
         yield return new WaitUntil(() => qAnswered);
 
-        SetControllersActive(false); 
+        SetControllersActive(false); // Disable lasers
         UpdateExperimenterUI("Trial Done. Press SPACE.");
         isRunning = false;
     }  
