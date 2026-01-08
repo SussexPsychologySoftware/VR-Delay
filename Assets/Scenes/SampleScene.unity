@@ -5493,13 +5493,19 @@ MonoBehaviour:
   audioSource: {fileID: 2018943631}
   experimenterDisplay: {fileID: 16905136}
   questionnaireScript: {fileID: 565901698}
+  thresholdUI: {fileID: 0}
   leftHandController: {fileID: 650961556}
   rightHandController: {fileID: 1740214639}
   participantID: test01
-  stimulationDuration: 5
-  delay: 0.86
+  startWithSelf: 1
+  maxThresholdDelay: 0.594
+  nThresholdSteps: 10
+  estimatedSystemLatency: 0.1
+  longAsyncTargetDelay: 1
+  thresholdDuration: 7
+  longDuration: 60
   ISI: 1
-  blocks: 1
+  thresholdRepetitions: 4
 --- !u!4 &2018943630
 Transform:
   m_ObjectHideFlags: 0
