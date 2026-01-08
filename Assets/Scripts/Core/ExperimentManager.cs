@@ -37,16 +37,20 @@ public class ExperimentManager : MonoBehaviour
     public string participantID = "test01";
     public bool startWithSelf = true;     // Toggle this to counterbalance order
 
-    [Header("Experiment Settings (milliseconds)")] 
+    [Header("Delay Settings (int milliseconds)")] 
     public int maxThresholdDelay = 594;
-    public int nThresholdSteps = 10; // Includes 0! i.e. 594/10 = stepSize=66ms
     public int longAsyncTargetDelay = 1000; // Target for Long Asynchronous trials (e.g. 1.0s)
-    public int thresholdDuration = 7000;
-    public int longDuration = 60000;
-    public int ISI = 1000;
-    public int thresholdRepetitions = 4;
-    public float estimatedSystemLatency = 0.134f;
     
+    [Header("Threshold Trial Settings")] 
+    public int nThresholdSteps = 10; // Includes 0! i.e. 594/10 = stepSize=66ms
+    public int thresholdRepetitions = 4;
+    
+    [Header("Other Experiment Settings (float seconds)")] 
+    public float thresholdDuration = 7.0f;
+    public float longDuration = 6.0f;
+    public float ISI = 1.0f;
+    public float estimatedSystemLatency = 0.134f;
+     
     [System.Serializable]
     public struct TrialType
     {
