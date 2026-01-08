@@ -249,7 +249,7 @@ public class ExperimentManager : MonoBehaviour
         else
         {
             // Show the Full Scroll View (9 Sliders)
-            questionnaireScript.ShowFullQuestionnaire((resultString) => 
+            questionnaireScript.ShowLongQuestionnaire((resultString) => 
             {
                 // Result format: "0.1,0.2,0.3,..."
                 LogData(trial, appliedDelay, "Full_Data", resultString);

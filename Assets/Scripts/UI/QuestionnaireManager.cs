@@ -33,7 +33,7 @@ public class QuestionnaireManager : MonoBehaviour
     }
     
     // --- PUBLIC METHODS CALLED BY EXPERIMENT MANAGER ---
-    public void ShowFullQuestionnaire(Action<string> callback)
+    public void ShowLongQuestionnaire(Action<string> callback)
     {
         onCompleteCallback = callback;
         
