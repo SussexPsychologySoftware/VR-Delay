@@ -62,8 +62,11 @@ public class ExperimentManager : MonoBehaviour
     
     // Internal State
     private List<TrialData> trialStack = new List<TrialData>();
-    private string savePath;
-    private StringBuilder csvData = new StringBuilder();
+    private string eventLogPath;
+    private string thresholdDataPath;
+    private string longDataPath;
+    
+    private int globalTrialCounter = 0;
     private float startTime;
     private bool isRunning = false;
     private TrialData currentTrial;
@@ -76,6 +79,7 @@ public class ExperimentManager : MonoBehaviour
         screenObject.SetActive(false);
         if(thresholdUI) thresholdUI.SetActive(false);
         
+        startTime = Time.time;
         UpdateExperimenterUI($"Press SPACE to begin.");
     }
 
@@ -84,13 +88,64 @@ public class ExperimentManager : MonoBehaviour
         string folder = Path.Combine(Application.streamingAssetsPath, "Data", participantID);
         if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
 
-        string fileName = $"{participantID}_{DateTime.Now:yyyy-MM-dd_HH-mm}.csv";
-        savePath = Path.Combine(folder, fileName);
+        string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm");
 
-        csvData.AppendLine("Timestamp,Phase,Condition,TargetDelay,AppliedDelay,Event,Value");
-        File.WriteAllText(savePath, csvData.ToString());
+        // 1. EVENT LOG (Technical Debugging)
+        eventLogPath = Path.Combine(folder, $"{participantID}_{timestamp}_Events.csv");
+        File.WriteAllText(eventLogPath, "Timestamp,Phase,TrialID,Event,Data\n");
 
-        startTime = Time.time;
+        // 2. THRESHOLD DATA (Analysis Ready)
+        // Columns: ID, TrialOrder, TrialID, Condition(Self/Other), Delay(ms), Q_Sync(Binary), Q_Ownership, Q_Pleasantness
+        thresholdDataPath = Path.Combine(folder, $"{participantID}_{timestamp}_Threshold.csv");
+        File.WriteAllText(thresholdDataPath, "ParticipantID,TrialOrder,TrialID,OwnerCondition,DelayMS,Q_SyncBinary,Q_Ownership,Q_Pleasantness\n");
+
+        // 3. LONG DATA (Analysis Ready)
+        // Columns: ID, TrialOrder, TrialID, Condition(Self/Other), DelayType(Sync/Async), Q1_Alienation, Q2_Ownership, ..., Q9_Pleasantness
+        longDataPath = Path.Combine(folder, $"{participantID}_{timestamp}_Long.csv");
+        string qHeaders = "Q1_Alienation,Q2_BodyNotMine,Q3_Numb,Q4_LessVivid,Q5_BodyOwn,Q6_MoveSeen,Q7_NotReal,Q8_Detached,Q9_Pleasant";
+        File.WriteAllText(longDataPath, $"ParticipantID,TrialOrder,TrialID,OwnerCondition,DelayType,{qHeaders}\n");
+    }
+    
+    void SaveThresholdRow(TrialData t, string questionnaireData, float appliedDelay)
+    {
+        // questionnaireData format: "Yes,0.55,0.82"
+        globalTrialCounter++;
+        string owner = t.isSelf ? "Self" : "Other";
+    
+        // Use t.delayMs (int)
+        string row = $"{participantID},{globalTrialCounter},{t.id},{owner},{t.delay},{questionnaireData}";
+    
+        File.AppendAllText(thresholdDataPath, row + "\n");
+    
+        // Pass 't' and 'appliedDelay' to match new LogEvent signature
+        LogEvent(t, appliedDelay, "Data_Saved", "Threshold"); 
+    }
+
+    void SaveLongRow(TrialData t, string questionnaireData, float appliedDelay)
+    {
+        // questionnaireData format: "0.1,0.2,..."
+        globalTrialCounter++;
+        string owner = t.isSelf ? "Self" : "Other";
+    
+        // Use t.delayMs check
+        string delayType = (t.delay > 0) ? "Asynchronous" : "Synchronous";
+    
+        string row = $"{participantID},{globalTrialCounter},{t.id},{owner},{delayType},{questionnaireData}";
+    
+        File.AppendAllText(longDataPath, row + "\n");
+    
+        // Pass 't' and 'appliedDelay'
+        LogEvent(t, appliedDelay, "Data_Saved", "Long");
+    }
+
+    // Simplified Event Logger for technical events (Start/Stop/Beep)
+    void LogEvent(TrialData t, float appliedDelay, string eventName, string eventValue)
+    {
+        // Format: Timestamp, Phase, TrialID, Event, Value, AppliedWebcamDelay
+        string row = $"{Time.time - startTime:F3},{t.phase},{t.id},{eventName},{eventValue},{appliedDelay:F3}";
+    
+        // Write to the technical event log ONLY
+        File.AppendAllText(eventLogPath, row + "\n");
     }
     
     void GenerateAllTrials(bool selfFirst)
@@ -214,15 +269,15 @@ public class ExperimentManager : MonoBehaviour
         UpdateExperimenterUI($"Phase: {phase}\n\nNext actor: {actor}\n\nPress 'R' when ready.");
         yield return new WaitUntil(() => Input.GetKeyDown(KeyCode.R));  //NOTE uncomment to run trials automatically
 
-        LogData(trial, appliedDelay, "Trial_Start", "Intention");
+        LogEvent(trial, appliedDelay, "Trial_Start", "Intention");
         UpdateExperimenterUI("Running...");
         
         yield return new WaitForSeconds(ISI);
         
         PlayBeep(); 
         screenObject.SetActive(true);
-        LogData(trial, appliedDelay, "Stimulation_Start", "Visuals_On");
-
+        LogEvent(trial, appliedDelay, "Stimulation_Start", "Visuals_On");
+        
         float timer = 0;
         while (timer < trial.duration)
         {
@@ -234,8 +289,8 @@ public class ExperimentManager : MonoBehaviour
 
         screenObject.SetActive(false);
         PlayBeep();
-        LogData(trial, appliedDelay, "Stimulation_End", "Visuals_Off");
-
+        LogEvent(trial, appliedDelay, "Stimulation_End", "Visuals_Off");
+        
         // QUESTIONNAIRE LOGIC
         UpdateExperimenterUI("Waiting for Response...");
         SetControllersActive(true);
@@ -245,21 +300,19 @@ public class ExperimentManager : MonoBehaviour
         // CHECK PHASE AND SHOW CORRECT UI
         if (trial.phase == ExperimentPhase.Threshold)
         {
-            // Show the new Threshold Panel (Binary + 2 Sliders)
             questionnaireScript.ShowThresholdQuestionnaire((resultString) => 
             {
-                // Result format: "Yes,0.45,0.12"
-                LogData(trial, appliedDelay, "Threshold_Data", resultString);
+                // resultString example: "Yes,0.45,0.12"
+                SaveThresholdRow(trial, resultString, appliedDelay);
                 qAnswered = true;
             });
         }
         else
         {
-            // Show the Full Scroll View (9 Sliders)
             questionnaireScript.ShowLongQuestionnaire((resultString) => 
             {
-                // Result format: "0.1,0.2,0.3,..."
-                LogData(trial, appliedDelay, "Full_Data", resultString);
+                // resultString example: "0.1,0.2,0.3,..."
+                SaveLongRow(trial, resultString, appliedDelay);
                 qAnswered = true;
             });
         }
@@ -271,13 +324,6 @@ public class ExperimentManager : MonoBehaviour
         UpdateExperimenterUI("Trial Done. Press SPACE.");
         isRunning = false;
     }  
-    
-    void LogData(TrialData t, float applied, string ev, string val)
-    {
-        string row = $"{Time.time - startTime:F3},{t.phase},{t.isSelf},{t.delay:F3},{applied:F3},{ev},{val}";
-        csvData.AppendLine(row);
-        File.AppendAllText(savePath, row + "\n");
-    }
 
     void UpdateExperimenterUI(string message) { if (experimenterDisplay != null) experimenterDisplay.text = message; }
     void PlayBeep() { if(audioSource) audioSource.Play(); }
