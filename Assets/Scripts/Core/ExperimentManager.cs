@@ -9,6 +9,7 @@ using UnityEngine.XR.Interaction.Toolkit;
 
 public class ExperimentManager : MonoBehaviour
 {
+    public static ExperimentManager Instance { get; private set; }
     public enum ExperimentPhase { Threshold, Long }
     
     [System.Serializable]
@@ -81,6 +82,42 @@ public class ExperimentManager : MonoBehaviour
         
         startTime = Time.time;
         UpdateExperimenterUI($"Press SPACE to begin.");
+    }
+    
+    public void InitExperiment(string id, bool isSelfFirst, int age, string gender, string hand)
+    {
+        // 1. Accept settings from the Setup UI
+        participantID = id;
+        startWithSelf = isSelfFirst;
+    
+        // 2. Log Demographics immediately (Optional: or save to a separate file)
+        SaveDemographics(id, age, gender, hand, isSelfFirst);
+
+        // 3. Now run the setup logic that used to be in Start()
+        SetupDataFile();
+        GenerateAllTrials(startWithSelf);
+    
+        // 4. Update UI
+        screenObject.SetActive(false);
+        if(thresholdUI) thresholdUI.SetActive(false);
+        UpdateExperimenterUI($"ID: {participantID}\nOrder: {(startWithSelf ? "Self-First" : "Other-First")}\nPress SPACE to begin.");
+    }
+
+    // Helper to save demographics to a separate single file
+    void SaveDemographics(string id, int age, string sex, string hand, bool selfFirst)
+    {
+        string path = Path.Combine(Application.streamingAssetsPath, "Data", "Master_Demographics.csv");
+        string header = "ParticipantID,Timestamp,Age,Sex,Handedness,ConditionOrder\n";
+    
+        if (!File.Exists(path)) 
+        {
+            // Create folder if needed
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            File.WriteAllText(path, header);
+        }
+    
+        string row = $"{id},{DateTime.Now},{age},{sex},{hand},{(selfFirst ? "Self-First" : "Other-First")}\n";
+        File.AppendAllText(path, row);
     }
 
     void SetupDataFile()
