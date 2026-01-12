@@ -101,39 +101,41 @@ public class ExperimentManager : MonoBehaviour
         return "P" + (directories.Length + 1).ToString("000");
     }
     
-    public void InitExperiment(ParticipantData demographics)
+    public void StartExperiment(ParticipantData demographics)
     {
+        // 1. Create Folders & Files (Using the function we just fixed)
         SetupParticipantFiles();
 
-        // Save Demographics to CSV
+        // 2. Save Demographics (New helper below)
         SaveDemographicsFile(demographics);
 
-        // Run the setup logic
+        // 3. Auto-Counterbalance: Odd IDs = Self First, Even IDs = Other First
         bool startWithSelf = (participantNum % 2 != 0);
+
+        // 4. Generate the Trials
         GenerateAllTrials(startWithSelf);
-    
-        // Update UI
-        screenObject.SetActive(false);
-        if(thresholdUI) thresholdUI.SetActive(false);
-        UpdateExperimenterUI($"ID: {participantID}\nOrder: {(startWithSelf ? "Self-First" : "Other-First")}\nPress SPACE to begin.");
-        Debug.Log($"<color=green>Experiment Started. ID: {participantID}. Demographics Saved.</color>");
-        
-        // Record start time
+
+        // 5. Final UI & Timer Setup
+        UpdateExperimenterUI($"ID: {participantID}\nOrder: {(startWithSelf ? "Self-First" : "Other-First")}\n\nPress SPACE to begin.");
         startTime = Time.time;
+    
+        Debug.Log($"<color=green>Experiment Started. ID: {participantID}. Data saved to: {participantFolder}</color>");
     }
 
     // Helper to save demographics to a separate single file
     private void SaveDemographicsFile(ParticipantData d)
     {
-        // Simple CSV format
+        // Header matches the struct fields
         string header = "ParticipantID,Age,Gender,Handedness,Ethnicity,Alcohol,Cannabis,StartCondition\n";
-        
-        // Determine start condition string for the record
+    
+        // Determine condition string for the record
         string startCond = (participantNum % 2 != 0) ? "Self-First" : "Other-First";
-        
-        string data = $"{participantID},{d.Age},{d.Gender},{d.Handedness},{d.Ethnicity},{d.AlcoholFreq},{d.CannabisFreq},{startCond}\n";
-        
-        File.WriteAllText(demographicsPath, header + data);
+    
+        // Construct the row
+        string row = $"{participantID},{d.Age},{d.Gender},{d.Handedness},{d.Ethnicity},{d.AlcoholFreq},{d.CannabisFreq},{startCond}\n";
+    
+        // Write to file (Path defined in SetupParticipantFiles)
+        File.WriteAllText(demographicsPath, header + row);
     }
 
     private void SetupParticipantFiles()
@@ -169,7 +171,7 @@ public class ExperimentManager : MonoBehaviour
         File.WriteAllText(longDataPath, $"ParticipantID,TrialOrder,TrialID,OwnerCondition,DelayType,{qHeaders}\n");
     }
 
-    // 2. SAVE THRESHOLD (Restored Logic)
+    // SAVE DATA ROWS
     void SaveThresholdRow(TrialData t, string questionnaireData, float appliedDelay)
     {
         // questionnaireData format: "Yes,0.55,0.82"
@@ -183,8 +185,7 @@ public class ExperimentManager : MonoBehaviour
 
         LogEvent(t, appliedDelay, "Data_Saved", "Threshold"); 
     }
-
-    // 3. SAVE LONG (Restored Logic)
+    
     void SaveLongRow(TrialData t, string questionnaireData, float appliedDelay)
     {
         // questionnaireData format: "0.1,0.2,..."
@@ -210,24 +211,73 @@ public class ExperimentManager : MonoBehaviour
         File.AppendAllText(eventLogPath, row + "\n");
     }
     
-    void GenerateAllTrials(bool selfFirst)
+    private void GenerateAllTrials(bool selfFirst)
     {
+        // --- 1. THRESHOLD TASK (AB vs BA) ---
+        // If selfFirst is true (Odd IDs), we do Self -> Other.
+        // If false (Even IDs), we do Other -> Self.
         if (selfFirst)
         {
-            AddThresholdBlock(true);  
-            AddThresholdBlock(false); 
-            AddLongBlock(true);       
-            AddLongBlock(false);      
+            AddThresholdBlock(true);  // Self
+            AddThresholdBlock(false); // Other
         }
         else
         {
-            AddThresholdBlock(false); 
-            AddThresholdBlock(true);  
-            AddLongBlock(false);      
-            AddLongBlock(true);       
+            AddThresholdBlock(false); // Other
+            AddThresholdBlock(true);  // Self
+        }
+
+        // --- 2. LONG TASK (Latin Square) ---
+        // Conditions: 
+        // 0: Self-Sync, 1: Self-Async, 2: Other-Sync, 3: Other-Async
+    
+        // Balanced Latin Square sequence for 4 items: 0, 1, 3, 2
+        // Rows shift by 1 for each group.
+        int[][] latinSquare = new int[][]
+        {
+            new int[] { 0, 1, 3, 2 }, // Group 1 (P001, P005...)
+            new int[] { 1, 2, 0, 3 }, // Group 2 (P002, P006...)
+            new int[] { 2, 3, 1, 0 }, // Group 3 (P003, P007...)
+            new int[] { 3, 0, 2, 1 }  // Group 4 (P004, P008...)
+        };
+
+        // Determine which row to use based on Participant ID
+        // (participantNum - 1) converts P001 to index 0.
+        int rowIndex = (participantNum - 1) % 4; 
+        int[] selectedSequence = latinSquare[rowIndex];
+
+        Debug.Log($"Long Task Group: {rowIndex + 1} (Sequence: {string.Join(",", selectedSequence)})");
+
+        // Add trials in the specific Latin Square order
+        foreach (int conditionIndex in selectedSequence)
+        {
+            AddLongTrialByIndex(conditionIndex);
         }
 
         Debug.Log($"Generated Total: {trialStack.Count} trials.");
+    }
+    
+    // Helper to translate the Latin Square Index (0-3) into actual Trial Data
+    private void AddLongTrialByIndex(int index)
+    {
+        bool isSelf = (index == 0 || index == 1); // 0 and 1 are Self
+        bool isSync = (index == 0 || index == 2); // 0 and 2 are Sync
+    
+        string ownerLabel = isSelf ? "Self" : "Other";
+        string delayLabel = isSync ? "Sync" : "Async";
+    
+        // Determine Delay (0 for Sync, target for Async)
+        int delay = isSync ? 0 : longAsyncTargetDelay;
+
+        // Create the single trial
+        trialStack.Add(new TrialData 
+        { 
+            id = $"Long_{delayLabel}_{ownerLabel}", 
+            phase = ExperimentPhase.Long, 
+            isSelf = isSelf, 
+            delay = delay, 
+            duration = longDuration 
+        });
     }
     
     void AddThresholdBlock(bool isSelf)
