@@ -9,7 +9,27 @@ using UnityEngine.XR.Interaction.Toolkit;
 
 public class ExperimentManager : MonoBehaviour
 {
-    public static ExperimentManager Instance { get; private set; }
+    // SINGLETON
+    public static ExperimentManager instance { get; private set; }
+    
+    // PUBLIC DATA PATH ACCESSORS
+    public string participantID;      
+    public string participantFolder; 
+    public string eventLogPath;
+    public string thresholdDataPath;
+    public string longDataPath;
+    public string demographicsPath;
+    
+    // Internal
+    private string rootSaveDirectory;
+    private int participantNum;
+    
+    private List<TrialData> trialStack = new List<TrialData>();
+    private int globalTrialCounter = 0;
+    private float startTime;
+    private bool isRunning = false;
+    private TrialData currentTrial;
+
     public enum ExperimentPhase { Threshold, Long }
     
     [System.Serializable]
@@ -27,17 +47,11 @@ public class ExperimentManager : MonoBehaviour
     public GameObject screenObject;       // Drag the Quad GameObject here (to turn it on/off)
     public AudioSource audioSource;       // For beeps (Start/Stop cues)
     public TMP_Text experimenterDisplay;  // Provide notes to researchers on pc screen
-    
-    [Header("UI & Input")]
     public QuestionnaireManager questionnaireScript; // Drag the new script here
     public GameObject thresholdUI;
     public GameObject leftHandController; // Drag XR Origin > LeftHand Controller
     public GameObject rightHandController; // Drag XR Origin > RightHand Controller
     
-    [Header("Participant Settings")]
-    public string participantID = "test01";
-    public bool startWithSelf = true;     // Toggle this to counterbalance order
-
     [Header("Delay Settings (int milliseconds)")] 
     public int maxThresholdDelay = 594;
     public int longAsyncTargetDelay = 1000; // Target for Long Asynchronous trials (e.g. 1.0s)
@@ -60,128 +74,139 @@ public class ExperimentManager : MonoBehaviour
         public bool isActive;       // Controls the instruction (Who acts?)
         public string instructions; // Message for the Experimenter
     }
-    
-    // Internal State
-    private List<TrialData> trialStack = new List<TrialData>();
-    private string eventLogPath;
-    private string thresholdDataPath;
-    private string longDataPath;
-    
-    private int globalTrialCounter = 0;
-    private float startTime;
-    private bool isRunning = false;
-    private TrialData currentTrial;
-    
-    void Start()
+        
+    private void Awake()
     {
-        SetupDataFile();
-        GenerateAllTrials(startWithSelf);
+        // Ensure only one instance exists
+        if (instance != null && instance != this)
+        {
+            Destroy(this.gameObject);
+        }
+        else
+        {
+            instance = this;
+            DontDestroyOnLoad(this.gameObject); // Optional: Keep across scenes
+        }
         
-        screenObject.SetActive(false);
-        if(thresholdUI) thresholdUI.SetActive(false);
-        
-        startTime = Time.time;
-        UpdateExperimenterUI($"Press SPACE to begin.");
+        // Initialize Root Path
+        // NOTE: StreamingAssets is read-only folder, works for editor/desktop builds.
+        // TODO: consider persistentDataPath is often safer for writing save data, 
+        rootSaveDirectory = Path.Combine(Application.streamingAssetsPath, "Data");
     }
     
-    public void InitExperiment(string id, bool isSelfFirst, int age, string gender, string hand)
+    public string PreviewNextParticipantID()
     {
-        // 1. Accept settings from the Setup UI
-        participantID = id;
-        startWithSelf = isSelfFirst;
+        if (!Directory.Exists(rootSaveDirectory)) Directory.CreateDirectory(rootSaveDirectory);
+        string[] directories = Directory.GetDirectories(rootSaveDirectory, "P*");
+        return "P" + (directories.Length + 1).ToString("000");
+    }
     
-        // 2. Log Demographics immediately (Optional: or save to a separate file)
-        SaveDemographics(id, age, gender, hand, isSelfFirst);
+    public void InitExperiment(ParticipantData demographics)
+    {
+        SetupParticipantFiles();
 
-        // 3. Now run the setup logic that used to be in Start()
-        SetupDataFile();
+        // Save Demographics to CSV
+        SaveDemographicsFile(demographics);
+
+        // Run the setup logic
+        bool startWithSelf = (participantNum % 2 != 0);
         GenerateAllTrials(startWithSelf);
     
-        // 4. Update UI
+        // Update UI
         screenObject.SetActive(false);
         if(thresholdUI) thresholdUI.SetActive(false);
         UpdateExperimenterUI($"ID: {participantID}\nOrder: {(startWithSelf ? "Self-First" : "Other-First")}\nPress SPACE to begin.");
+        Debug.Log($"<color=green>Experiment Started. ID: {participantID}. Demographics Saved.</color>");
+        
+        // Record start time
+        startTime = Time.time;
     }
 
     // Helper to save demographics to a separate single file
-    void SaveDemographics(string id, int age, string sex, string hand, bool selfFirst)
+    private void SaveDemographicsFile(ParticipantData d)
     {
-        string path = Path.Combine(Application.streamingAssetsPath, "Data", "Master_Demographics.csv");
-        string header = "ParticipantID,Timestamp,Age,Sex,Handedness,ConditionOrder\n";
-    
-        if (!File.Exists(path)) 
-        {
-            // Create folder if needed
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            File.WriteAllText(path, header);
-        }
-    
-        string row = $"{id},{DateTime.Now},{age},{sex},{hand},{(selfFirst ? "Self-First" : "Other-First")}\n";
-        File.AppendAllText(path, row);
+        // Simple CSV format
+        string header = "ParticipantID,Age,Gender,Handedness,Ethnicity,Alcohol,Cannabis,StartCondition\n";
+        
+        // Determine start condition string for the record
+        string startCond = (participantNum % 2 != 0) ? "Self-First" : "Other-First";
+        
+        string data = $"{participantID},{d.Age},{d.Gender},{d.Handedness},{d.Ethnicity},{d.AlcoholFreq},{d.CannabisFreq},{startCond}\n";
+        
+        File.WriteAllText(demographicsPath, header + data);
     }
 
-    void SetupDataFile()
+    private void SetupParticipantFiles()
     {
-        string folder = Path.Combine(Application.streamingAssetsPath, "Data", participantID);
-        if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+        // Ensure Root Exists
+        if (!Directory.Exists(rootSaveDirectory)) Directory.CreateDirectory(rootSaveDirectory);
 
+        // Generate ID
+        string[] directories = Directory.GetDirectories(rootSaveDirectory, "P*");
+        participantNum = directories.Length + 1;
+        participantID = "P" + participantNum.ToString("000");
+
+        // Create Folder
+        participantFolder = Path.Combine(rootSaveDirectory, participantID);
+        if (!Directory.Exists(participantFolder)) Directory.CreateDirectory(participantFolder);
+
+        // Define Paths
         string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm");
+        
+        eventLogPath = Path.Combine(participantFolder, $"{participantID}_{timestamp}_Events.csv");
+        thresholdDataPath = Path.Combine(participantFolder, $"{participantID}_{timestamp}_Threshold.csv");
+        longDataPath = Path.Combine(participantFolder, $"{participantID}_{timestamp}_Long.csv");
+        demographicsPath = Path.Combine(participantFolder, $"{participantID}_{timestamp}_Demographics.csv");
 
-        // 1. EVENT LOG (Technical Debugging)
-        eventLogPath = Path.Combine(folder, $"{participantID}_{timestamp}_Events.csv");
-        File.WriteAllText(eventLogPath, "Timestamp,Phase,TrialID,Event,Data\n");
+        // --- WRITE HEADERS (Matches your original format) ---
+        
+        // Fixed: Added ",AppliedDelay" to match the 6 columns in LogEvent
+        File.WriteAllText(eventLogPath, "Timestamp,Phase,TrialID,Event,Data,AppliedDelay\n");
 
-        // 2. THRESHOLD DATA (Analysis Ready)
-        // Columns: ID, TrialOrder, TrialID, Condition(Self/Other), Delay(ms), Q_Sync(Binary), Q_Ownership, Q_Pleasantness
-        thresholdDataPath = Path.Combine(folder, $"{participantID}_{timestamp}_Threshold.csv");
         File.WriteAllText(thresholdDataPath, "ParticipantID,TrialOrder,TrialID,OwnerCondition,DelayMS,Q_SyncBinary,Q_Ownership,Q_Pleasantness\n");
-
-        // 3. LONG DATA (Analysis Ready)
-        // Columns: ID, TrialOrder, TrialID, Condition(Self/Other), DelayType(Sync/Async), Q1_Alienation, Q2_Ownership, ..., Q9_Pleasantness
-        longDataPath = Path.Combine(folder, $"{participantID}_{timestamp}_Long.csv");
+        
         string qHeaders = "Q1_Alienation,Q2_BodyNotMine,Q3_Numb,Q4_LessVivid,Q5_BodyOwn,Q6_MoveSeen,Q7_NotReal,Q8_Detached,Q9_Pleasant";
         File.WriteAllText(longDataPath, $"ParticipantID,TrialOrder,TrialID,OwnerCondition,DelayType,{qHeaders}\n");
     }
-    
+
+    // 2. SAVE THRESHOLD (Restored Logic)
     void SaveThresholdRow(TrialData t, string questionnaireData, float appliedDelay)
     {
         // questionnaireData format: "Yes,0.55,0.82"
         globalTrialCounter++;
         string owner = t.isSelf ? "Self" : "Other";
-    
-        // Use t.delayMs (int)
+
+        // Matches your original format exactly
         string row = $"{participantID},{globalTrialCounter},{t.id},{owner},{t.delay},{questionnaireData}";
-    
+
         File.AppendAllText(thresholdDataPath, row + "\n");
-    
-        // Pass 't' and 'appliedDelay' to match new LogEvent signature
+
         LogEvent(t, appliedDelay, "Data_Saved", "Threshold"); 
     }
 
+    // 3. SAVE LONG (Restored Logic)
     void SaveLongRow(TrialData t, string questionnaireData, float appliedDelay)
     {
         // questionnaireData format: "0.1,0.2,..."
         globalTrialCounter++;
         string owner = t.isSelf ? "Self" : "Other";
-    
-        // Use t.delayMs check
+
+        // Logic: If delay > 0, it is Async
         string delayType = (t.delay > 0) ? "Asynchronous" : "Synchronous";
-    
+
         string row = $"{participantID},{globalTrialCounter},{t.id},{owner},{delayType},{questionnaireData}";
-    
+
         File.AppendAllText(longDataPath, row + "\n");
-    
-        // Pass 't' and 'appliedDelay'
+
         LogEvent(t, appliedDelay, "Data_Saved", "Long");
     }
 
-    // Simplified Event Logger for technical events (Start/Stop/Beep)
+    // 4. LOG EVENT (Restored Logic)
     void LogEvent(TrialData t, float appliedDelay, string eventName, string eventValue)
     {
         // Format: Timestamp, Phase, TrialID, Event, Value, AppliedWebcamDelay
         string row = $"{Time.time - startTime:F3},{t.phase},{t.id},{eventName},{eventValue},{appliedDelay:F3}";
-    
-        // Write to the technical event log ONLY
+
         File.AppendAllText(eventLogPath, row + "\n");
     }
     
