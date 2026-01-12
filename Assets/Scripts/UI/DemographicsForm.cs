@@ -2,7 +2,7 @@
 using TMPro;
 using System.Collections.Generic;
 
-public class ResearcherSetup : MonoBehaviour
+public class DemographicsForm : MonoBehaviour
 {
     [Header("UI Panels")]
     public GameObject setupPanel; // Assign the Canvas/Panel holding this form
