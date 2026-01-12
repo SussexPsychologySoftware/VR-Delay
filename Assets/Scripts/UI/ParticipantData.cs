@@ -1,17 +1,12 @@
-﻿using System;
-
-[Serializable]
-public class ParticipantData
+﻿[System.Serializable]
+public struct ParticipantData
 {
-    public string ParticipantID;
-    public string Handedness;
-    public string Gender;
+    // We don't include ID here because the Manager generates it.
     public int Age;
-    public string Ethnicity;
     public int YearsEducation;
+    public string Gender;
+    public string Handedness;
+    public string Ethnicity;
     public string AlcoholFreq;
     public string CannabisFreq;
-
-    // Condition Data
-    public string ConditionName; // e.g., "Researcher Strokes"
 }
