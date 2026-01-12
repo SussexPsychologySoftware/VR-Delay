@@ -1,17 +1,13 @@
 ﻿using UnityEngine;
-using UnityEngine.UI;
 using TMPro;
-using System.IO;
+using System.Collections.Generic;
 
 public class ResearcherSetup : MonoBehaviour
 {
     [Header("UI Panels")]
-    public GameObject demographicsPanel; 
-    public GameObject researcherIntsructions;
-    
-    [Header("Running Elements")]
-    public TextMeshProUGUI researcherInstructionText;
-    
+    public GameObject setupPanel; // Assign the Canvas/Panel holding this form
+    public TextMeshProUGUI statusText; // Assign the red instruction text at the top
+
     [Header("Demographic Inputs")]
     public TMP_InputField ageInput;
     public TMP_InputField educationInput;
@@ -21,83 +17,66 @@ public class ResearcherSetup : MonoBehaviour
     public TMP_Dropdown alcoholDropdown;
     public TMP_Dropdown cannabisDropdown;
 
-    [Header("Experiment Settings")]
-    public TMP_Dropdown conditionDropdown; // e.g., "Researcher Strokes", "Participant Strokes"
-    public Button startButton;
-
-    private string saveDirectory;
+    // NOTE: Removed Condition Dropdown (Handled automatically by Manager now)
 
     private void Start()
     {
-        // Initial State: Show Setup, Hide Running
-        demographicsPanel.SetActive(true);
-        researcherIntsructions.SetActive(false);
-    }
-
-    private void PopulateDropdowns()
-    {
-        // Example: Clear and add options if not done in Editor
-        // You can also just set these up in the Inspector and skip this code.
-        conditionDropdown.ClearOptions();
-        conditionDropdown.AddOptions(new System.Collections.Generic.List<string> { "Researcher Strokes", "Participant Strokes" });
-    }
-
-    private string GenerateParticipantID()
-    {
-        // SIMPLE METHOD: Count files and add 1.
-        // File pattern: "Participant_X.csv"
-        int fileCount = Directory.GetFiles(saveDirectory, "Participant_*.csv").Length;
-        return "P" + (fileCount + 1).ToString("000"); // Returns P001, P002, etc.
-    }
-
-    private void OnStartClicked()
-    {
-        // Gather Data
-        ParticipantData data = new ParticipantData();
-        data.ParticipantID = GenerateParticipantID();
-        data.Age = int.TryParse(ageInput.text, out int a) ? a : 0;
-        data.YearsEducation = int.TryParse(educationInput.text, out int e) ? e : 0;
-        
-        // Get text from Dropdowns
-        data.Gender = genderDropdown.options[genderDropdown.value].text;
-        data.Handedness = handednessDropdown.options[handednessDropdown.value].text;
-        data.Ethnicity = ethnicityDropdown.options[ethnicityDropdown.value].text;
-        data.AlcoholFreq = alcoholDropdown.options[alcoholDropdown.value].text;
-        data.CannabisFreq = cannabisDropdown.options[cannabisDropdown.value].text;
-        data.ConditionName = conditionDropdown.options[conditionDropdown.value].text;
-
-        // Set Researcher Instructions (red text)
-        if (data.ConditionName == "Researcher Strokes")
-            researcherInstructionText.text = "INSTRUCTION: STROKE THE HAND";
-        else
-            researcherInstructionText.text = "INSTRUCTION: OBSERVE THE PARTICIPANT";
-
-        // SWAP PANELS
-        demographicsPanel.SetActive(false);
-        researcherIntsructions.SetActive(true);
-        
-        // 3. Pass to Manager and Start
-        // Assuming ExperimentManager is a Singleton
-        ExperimentManager.Instance.InitializeExperiment(data);
-
-        // Hide this Setup Canvas 
-        //gameObject.SetActive(false); 
-    }
-
-    private void UpdateResearcherInstructions(string condition)
-    {
-        if (researcherInstructionText != null)
+        // 1. Preview the Next ID
+        // We ask the Manager what the next ID will be so we can write it in our notebook if needed.
+        if (ExperimentManager.instance != null)
         {
-            researcherInstructionText.color = Color.red;
-            
-            if (condition == "Researcher Strokes")
-            {
-                researcherInstructionText.text = "INSTRUCTION: Researcher must stroke the rubber hand.";
-            }
-            else
-            {
-                researcherInstructionText.text = "INSTRUCTION: Participant must stroke the rubber hand.";
-            }
+            string nextID = ExperimentManager.instance.PreviewNextParticipantID();
+            UpdateStatus($"Ready. Next Participant: {nextID}");
         }
+    }
+
+    public void OnStartClicked()
+    {
+        // 1. Basic Validation
+        if (string.IsNullOrEmpty(ageInput.text))
+        {
+            UpdateStatus("Error: Please enter Age.");
+            return;
+        }
+
+        // 2. Package the Data
+        ParticipantData data = new ParticipantData();
+        
+        int.TryParse(ageInput.text, out data.Age);
+        int.TryParse(educationInput.text, out data.YearsEducation);
+        
+        data.Gender = GetDropdownValue(genderDropdown);
+        data.Handedness = GetDropdownValue(handednessDropdown);
+        data.Ethnicity = GetDropdownValue(ethnicityDropdown);
+        data.AlcoholFreq = GetDropdownValue(alcoholDropdown);
+        data.CannabisFreq = GetDropdownValue(cannabisDropdown);
+
+        // 3. Hand off to Manager
+        // This starts the experiment, creates folders, and generates the ID.
+        if (ExperimentManager.instance != null)
+        {
+            ExperimentManager.instance.StartExperiment(data);
+        }
+        else
+        {
+            Debug.LogError("ExperimentManager not found!");
+            return;
+        }
+
+        // 4. Hide Setup UI
+        // The ExperimentManager will now display its own instructions on the 'experimenterDisplay'.
+        setupPanel.SetActive(false); 
+    }
+
+    // Helper to get text safely
+    private string GetDropdownValue(TMP_Dropdown dropdown)
+    {
+        if (dropdown == null || dropdown.options.Count == 0) return "NA";
+        return dropdown.options[dropdown.value].text;
+    }
+
+    private void UpdateStatus(string msg)
+    {
+        if (statusText) statusText.text = msg;
     }
 }
