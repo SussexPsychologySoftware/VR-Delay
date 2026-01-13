@@ -269,3 +269,4 @@ Assets/StreamingAssets/Data/*
 # Ignore pyenv
 LSL/venv/
 LSL/__pycache__/
+VR Delay.zip
