@@ -2,109 +2,132 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import filedialog
+import os
 
-def load_rubber_hand_data(filename):
-    print(f"Loading {filename}...")
-    # Load the XDF file. 
-    # streams is a list of dictionaries, one for each stream (Unity, Nonin, etc.)
-    streams, header = pyxdf.load_xdf(filename)
+def load_and_analyze():
+    # --- 1. OPEN FILE PICKER ---
+    # This hides the main empty tkinter window
+    root = tk.Tk()
+    root.withdraw()
 
-    # 1. FIND STREAMS
+    print("Please select your .xdf data file...")
+    filename = filedialog.askopenfilename(
+        title="Select XDF Data File",
+        filetypes=[("XDF files", "*.xdf"), ("All files", "*.*")]
+    )
+
+    if not filename:
+        print("No file selected. Exiting.")
+        return
+
+    print(f"\nLoading: {os.path.basename(filename)}...")
+
+    # --- 2. LOAD XDF ---
+    try:
+        streams, header = pyxdf.load_xdf(filename)
+    except Exception as e:
+        print(f"Error loading XDF: {e}")
+        return
+
+    # --- 3. IDENTIFY STREAMS ---
     marker_stream = None
     data_stream = None
 
+    print("\n--- STREAMS FOUND ---")
     for s in streams:
         name = s['info']['name'][0]
         type_ = s['info']['type'][0]
-        
-        # Look for our Unity stream
-        if name == 'RubberHandEvents' or type_ == 'Markers':
-            marker_stream = s
-            print(f"Found Markers: {name}")
-            
-        # Look for the Nonin stream (Generic check for PPG or generic Data)
-        # Adjust 'Nonin' if your specific device is named differently
-        elif 'Nonin' in name or type_ in ['PPG', 'Data', 'EEG']:
-            data_stream = s
-            print(f"Found Data: {name} ({type_})")
+        count = int(s['info']['channel_count'][0])
+        print(f"Name: {name}, Type: {type_}, Channels: {count}")
 
-    if not marker_stream or not data_stream:
-        print("Error: Could not find both streams. Check stream names.")
+        if 'RubberHand' in name or type_ == 'Markers':
+            marker_stream = s
+        elif 'Nonin' in name or 'HeartRate' in type_:
+            data_stream = s
+
+    if not marker_stream:
+        print("ERROR: Could not find 'RubberHandEvents' marker stream.")
+        return
+    if not data_stream:
+        print("ERROR: Could not find Heart Rate data stream.")
         return
 
-    # 2. EXTRACT DATA
-    # LSL stores timestamps in 'time_stamps' and data in 'time_series'
+    # --- 4. EXTRACT DATA ---
     marker_stamps = marker_stream['time_stamps']
-    marker_strings = [x[0] for x in marker_stream['time_series']] # Unpack list of lists
+    marker_strings = [x[0] for x in marker_stream['time_series']]
 
     data_stamps = data_stream['time_stamps']
     data_values = data_stream['time_series']
 
-    # 3. SLICE TRIALS
-    # We look for "Start" and "End" pairs in the markers
+    # --- 5. SLICE TRIALS ---
     results = []
 
+    print("\n--- PROCESSING TRIALS ---")
     for i, marker in enumerate(marker_strings):
         if "Start" in marker:
-            # Parse the marker string (e.g., "Threshold_Self_Sync_Start")
-            # We split by '_'
-            parts = marker.split('_')
-            phase = parts[0]      # Threshold/Long
-            condition = parts[1]  # Self/Other
-            delay = parts[2]      # Sync/Async or ms
-            
+            # Parse marker: "Phase_Owner_Condition_Start"
+            # Example: "Threshold_Self_Sync_Start"
+            try:
+                parts = marker.split('_')
+                phase = parts[0]
+                condition = parts[1]
+                delay_type = parts[2]
+            except:
+                print(f"Skipping malformed marker: {marker}")
+                continue
+
             start_time = marker_stamps[i]
-            
-            # Find the corresponding "End" marker (the next one)
+
+            # Find matching End marker
             if i + 1 < len(marker_stamps):
-                end_time = marker_stamps[i+1]
                 end_marker = marker_strings[i+1]
-                
-                # Double check it is actually an end marker
+                end_time = marker_stamps[i+1]
+
                 if "End" not in end_marker:
-                    print(f"Warning: Marker at {start_time} has no immediate End marker.")
+                    print(f"Warning: Trial started at {start_time:.1f} but next marker is {end_marker}")
                     continue
 
-                # 4. GET HEART RATE FOR THIS DURATION
-                # Find indices in the data stream that fall between start and end
-                # searchsorted is a fast way to find the index of a timestamp
+                # SLICE DATA
+                # Find indices in the HR stream corresponding to start/end times
                 idx_start = np.searchsorted(data_stamps, start_time)
                 idx_end = np.searchsorted(data_stamps, end_time)
-                
-                # Extract the chunk of data
+
                 trial_data = data_values[idx_start:idx_end]
-                
-                # Calculate mean HR for this trial (assuming channel 0 is HR)
+
+                # Flatten the list of lists (if necessary) and calculate mean
                 if len(trial_data) > 0:
-                    mean_hr = np.mean(trial_data) 
-                    
+                    # Convert to flat numpy array for math
+                    flat_data = np.array(trial_data).flatten()
+                    mean_hr = np.mean(flat_data)
+
                     results.append({
                         "Phase": phase,
-                        "Condition": condition,
-                        "Delay": delay,
-                        "Mean_HR": mean_hr,
-                        "Duration": end_time - start_time
+                        "Owner": condition,
+                        "Delay": delay_type,
+                        "Mean_HR": round(mean_hr, 2),
+                        "Duration_s": round(end_time - start_time, 2)
                     })
+                    print(f"Processed: {marker} -> HR: {mean_hr:.1f} bpm")
+                else:
+                    print(f"No data points found for {marker}")
 
-    # 4. OUTPUT RESULTS
-    df = pd.DataFrame(results)
-    print("\n--- ANALYSIS RESULTS ---")
-    print(df)
-    
-    # Save to CSV for SPSS/R
-    df.to_csv("processed_results.csv", index=False)
-    print("\nSaved to processed_results.csv")
+    # --- 6. SAVE RESULTS ---
+    if len(results) > 0:
+        df = pd.DataFrame(results)
 
-    # Optional: Plot the last trial to sanity check
-    if 'idx_start' in locals():
-        plt.plot(data_stamps[idx_start:idx_end], data_values[idx_start:idx_end])
-        plt.title(f"Raw Data for Last Trial ({marker})")
-        plt.xlabel("Time (s)")
-        plt.show()
+        # Create output filename based on input filename
+        input_dir = os.path.dirname(filename)
+        base_name = os.path.splitext(os.path.basename(filename))[0]
+        output_path = os.path.join(input_dir, f"{base_name}_RESULTS.csv")
 
-# --- USAGE ---
-# Replace with your actual file name
-# load_rubber_hand_data("C:/Path/To/Data/P001_rubberhand.xdf")
+        df.to_csv(output_path, index=False)
+        print(f"\nSUCCESS! Results saved to:\n{output_path}")
+        print("\nPreview:")
+        print(df.head())
+    else:
+        print("\nNo valid trials found. Check your marker names.")
 
 if __name__ == "__main__":
-    load_rubber_hand_data(r"C:\Users\Max\Documents\Code\VR Delay\Assets\StreamingAssets\Data\P020\sub-P001\ses-S001\eeg\sub-P001_ses-S001_task-Default_run-001_eeg.xdf")
+    load_and_analyze()

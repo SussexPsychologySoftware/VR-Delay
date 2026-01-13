@@ -267,5 +267,5 @@ $RECYCLE.BIN/
 Assets/StreamingAssets/Data/*
 !Assets/StreamingAssets/Data/.gitkeep
 # Ignore pyenv
-Hardware_Tools/venv/
-Hardware_Tools/__pycache__/
+LSL/venv/
+LSL/__pycache__/
