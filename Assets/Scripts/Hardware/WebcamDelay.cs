@@ -7,112 +7,107 @@ public class WebcamDelay : MonoBehaviour
     public string deviceName = ""; 
     
     [Header("Display Settings")]
-    [Tooltip("Size multiplier. 1.0 = 1 meter tall. Adjust this to fill view.")]
     [Range(0.1f, 2.0f)] public float viewSize = 0.8f; 
-    public bool fixAspectRatio = true;
-
+    
     [Header("Delay Settings")]
     public bool useDelay = false;
-    [Range(0f, 5f)] public float delaySeconds = 1.0f;
+    [Range(0f, 3f)] public float delaySeconds = 1.0f;
 
-    [Header("Performance")]
+    [Header("Memory Optimization")]
+    [Tooltip("Downscale the buffer to save VRAM. 0.5 = half resolution (25% memory use).")]
+    [Range(0.1f, 1.0f)] public float bufferScale = 1f;
     public int targetFPS = 50;
 
-    // Internal
     private WebCamTexture webcam;
     private Renderer screenRenderer;
-    private Texture2D displayTexture;
-    private Queue<Color32[]> frameBuffer = new Queue<Color32[]>();
-    private bool isRatioSet = false;
+    private RenderTexture[] frameBuffer;
+    private int writeHead = 0;
+    private int bufferSize = 0;
 
     public void Initialize()
     {
         screenRenderer = GetComponent<Renderer>();
-    
-        // Safety: If no name was provided, default to the first available
         if (string.IsNullOrEmpty(deviceName) && WebCamTexture.devices.Length > 0)
-        {
             deviceName = WebCamTexture.devices[0].name;
-        }
 
         StartWebcam();
     }
 
     void StartWebcam()
     {
-        string nameToUse = string.IsNullOrEmpty(deviceName) ? WebCamTexture.devices[0].name : deviceName;
-        // Request a high resolution, but the camera might give us something else
-        webcam = new WebCamTexture(nameToUse, 1920, 1080, targetFPS);
+        // Request high res from hardware, but we will downscale for storage
+        webcam = new WebCamTexture(deviceName, 1920, 1080, targetFPS);
         webcam.Play();
+        StartCoroutine(SetupBuffer());
+    }
 
-        displayTexture = new Texture2D(webcam.width, webcam.height);
-        screenRenderer.material.mainTexture = displayTexture;
+    System.Collections.IEnumerator SetupBuffer()
+    {
+        while (webcam.width < 100) yield return null;
+
+        // Calculate downscaled dimensions
+        int bWidth = Mathf.RoundToInt(webcam.width * bufferScale);
+        int bHeight = Mathf.RoundToInt(webcam.height * bufferScale);
+
+        // Pre-allocate the GPU Ring Buffer
+        bufferSize = targetFPS * 4; // Buffer for up to 4 seconds
+        frameBuffer = new RenderTexture[bufferSize];
+
+        for (int i = 0; i < bufferSize; i++)
+        {
+            // Create small, efficient textures
+            frameBuffer[i] = new RenderTexture(bWidth, bHeight, 0);
+            frameBuffer[i].filterMode = FilterMode.Bilinear; // Smooths out the downscaling
+            frameBuffer[i].Create();
+        }
+
+        // Apply Aspect Ratio
+        float aspect = (float)webcam.width / webcam.height;
+        transform.localScale = new Vector3(viewSize * aspect, viewSize, 1f);
     }
 
     void Update()
     {
         if (webcam == null || !webcam.isPlaying) return;
-        // Check if webcam has started and we haven't set the size yet
-        if (webcam.didUpdateThisFrame) 
-        {
-            // Only adjust scale once the camera gives us valid dimensions ( > 100px)
-            if (fixAspectRatio && !isRatioSet && webcam.width > 100)
-            {
-                UpdateAspectRatio();
-            }
-            
-            ProcessFrames();
-        }
-    }
+        if (!webcam.didUpdateThisFrame) return;
 
-    // This function calculates the correct shape based on the camera hardware
-    public void UpdateAspectRatio()
-    {
-        float aspectRatio = (float)webcam.width / (float)webcam.height;
+        // DETERMINING THE BYPASS
+        // If delay is off or set to 0, we show the raw webcam feed directly
+        bool isBypassActive = !useDelay || delaySeconds <= 0.01f;
+
+        if (isBypassActive)
+        {
+            // SPEED: Directly pipe the webcam texture to the material
+            screenRenderer.material.mainTexture = webcam;
         
-        // Scale Y is controlled by viewSize
-        // Scale X is calculated: Height * AspectRatio
-        transform.localScale = new Vector3(viewSize * aspectRatio, viewSize, 1f);
-        
-        isRatioSet = true;
-        //Debug.Log($"Camera Resolution: {webcam.width}x{webcam.height}. Aspect Ratio: {aspectRatio}");
-    }
-
-    // Called automatically when you change values in Inspector
-    void OnValidate()
-    {
-        // Allows you to adjust the slider in real-time while playing
-        if (webcam != null && webcam.isPlaying)
-        {
-            UpdateAspectRatio();
+            // Optional: We stop writing to the buffer to save GPU cycles
+            return; 
         }
-    }
 
-    void ProcessFrames()
-    {
-        Color32[] currentPixels = webcam.GetPixels32();
+        // DELAY LOGIC (Only runs if delay is active)
+        if (frameBuffer == null) return;
 
-        if (useDelay)
-        {
-            frameBuffer.Enqueue(currentPixels);
-            int requiredFrameCount = Mathf.RoundToInt(delaySeconds * targetFPS);
+        // 1. Write to buffer
+        Graphics.Blit(webcam, frameBuffer[writeHead]);
 
-            if (frameBuffer.Count > requiredFrameCount)
-            {
-                displayTexture.SetPixels32(frameBuffer.Dequeue());
-                displayTexture.Apply();
-            }
-        }
-        else
-        {
-            displayTexture.SetPixels32(currentPixels);
-            displayTexture.Apply();
-            if (frameBuffer.Count > 0) frameBuffer.Clear();
-        }
+        // 2. Calculate Read Head
+        int framesToDelay = Mathf.RoundToInt(delaySeconds * targetFPS);
+        framesToDelay = Mathf.Clamp(framesToDelay, 1, bufferSize - 1);
+        int readHead = (writeHead - framesToDelay + bufferSize) % bufferSize;
+
+        // 3. Display from buffer
+        screenRenderer.material.mainTexture = frameBuffer[readHead];
+
+        // 4. Advance Write Head
+        writeHead = (writeHead + 1) % bufferSize;
     }
 
     void OnDestroy()
     {
         if (webcam != null) webcam.Stop();
+        if (frameBuffer != null)
+        {
+            foreach (var rt in frameBuffer) if (rt != null) rt.Release();
+        }
     }
 }
