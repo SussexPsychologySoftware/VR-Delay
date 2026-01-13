@@ -41,6 +41,13 @@ public class ExperimentManager : MonoBehaviour
         public float duration;        // 7s or 60s
     }
     
+    [Header("Researcher Dashboard")]
+    public GameObject setupCanvas;
+    public TMP_Dropdown webcamDropdown;
+    public TMP_Dropdown comPortDropdown;
+    public TMP_InputField idInput;
+    public UnityEngine.UI.Button confirmButton;
+    
     [Header("Components")]
     public WebcamDelay webcamScript;      // Drag the Quad/Script here
     public GameObject screenObject;       // Drag the Quad GameObject here (to turn it on/off)
@@ -93,6 +100,63 @@ public class ExperimentManager : MonoBehaviour
         rootSaveDirectory = Path.Combine(Application.streamingAssetsPath, "Data");
     }
     
+    private void Start()
+    {
+        // Do NOT call StartExperiment() yet.
+        // Instead, initialize the UI.
+        InitializeSetupUI();
+    }
+    
+    void InitializeSetupUI()
+    {
+        setupCanvas.SetActive(true);
+
+        // 1. Auto-Populate ID
+        idInput.text = PreviewNextParticipantID();
+
+        // 2. Populate Webcams
+        webcamDropdown.ClearOptions();
+        foreach (var d in WebCamTexture.devices) 
+            webcamDropdown.options.Add(new TMP_Dropdown.OptionData(d.name));
+        webcamDropdown.RefreshShownValue();
+
+        // 3. Populate COM Ports (Requires API Level .NET Framework)
+        comPortDropdown.ClearOptions();
+        string[] ports = System.IO.Ports.SerialPort.GetPortNames();
+        foreach (var p in ports) 
+            comPortDropdown.options.Add(new TMP_Dropdown.OptionData(p));
+        comPortDropdown.RefreshShownValue();
+
+        // 4. Bind Button
+        confirmButton.onClick.RemoveAllListeners();
+        confirmButton.onClick.AddListener(OnConfirmSettings);
+    }
+    
+    public void OnConfirmSettings()
+    {
+        // A. Capture Settings
+        participantID = idInput.text;
+    
+        // Set Webcam Name (ExperimentManager pushes this to WebcamDelay)
+        if (webcamDropdown.options.Count > 0)
+        {
+            string selectedCam = webcamDropdown.options[webcamDropdown.value].text;
+            webcamScript.deviceName = selectedCam;
+        }
+    
+        // (Future) Set COM Port for LSL/Oximeter
+        // string selectedCom = comPortDropdown.options[comPortDropdown.value].text;
+
+        // Initialize Hardware
+        webcamScript.Initialize(); // Manually start the webcam now
+
+        // Hide UI (Or switch to a smaller "Status" view)
+        setupCanvas.SetActive(false);
+
+        // Start the Logic
+        StartExperiment(); 
+    }
+    
     public string PreviewNextParticipantID()
     {
         if (!Directory.Exists(rootSaveDirectory)) Directory.CreateDirectory(rootSaveDirectory);
@@ -100,7 +164,7 @@ public class ExperimentManager : MonoBehaviour
         return "P" + (directories.Length + 1).ToString("000");
     }
     
-    public void StartExperiment(ParticipantData demographics)
+    public void StartExperiment()
     {
         // Create Folders & Files (Using the function we just fixed)
         SetupParticipantFiles();
