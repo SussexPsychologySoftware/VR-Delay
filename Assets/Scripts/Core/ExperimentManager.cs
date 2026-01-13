@@ -387,8 +387,15 @@ public class ExperimentManager : MonoBehaviour
         string phase = trial.phase == ExperimentPhase.Threshold ? "THRESHOLD" : "LONG";
         
         UpdateExperimenterUI($"Phase: {phase}\n\nNext actor: {actor}\n\nPress 'Space' when ready.");
-        yield return new WaitUntil(() => Input.GetKeyDown(KeyCode.Space));  //NOTE uncomment to run trials automatically
-
+        while (!Input.GetKeyDown(KeyCode.Space))
+        {
+            // Allow Researcher to toggle camera to check setup
+            if (Input.GetKeyDown(KeyCode.C))
+            {
+                screenObject.SetActive(!screenObject.activeSelf);
+            }
+            yield return null;
+        }
         LogEvent(trial, appliedDelay, "Trial_Start", "Intention");
         UpdateExperimenterUI("Running...");
         
