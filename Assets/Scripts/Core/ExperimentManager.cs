@@ -123,6 +123,37 @@ public class ExperimentManager : MonoBehaviour
         Debug.Log($"LSL Stream '{lslStreamName}' created.");
     }
     
+    // Generates a unique marker string based on the current trial config
+    // Format: Phase_Owner_Condition_State
+    // Examples: "Long_Self_Async_Start", "Threshold_Other_Sync_End"
+    void SendLSLMarker(TrialData t, string state)
+    {
+        if (lslOutlet == null) return;
+
+        string phaseStr = t.phase == ExperimentPhase.Threshold ? "Threshold" : "Long";
+        string ownerStr = t.isSelf ? "Self" : "Other";
+        string conditionStr = "Sync"; // Default for Threshold
+
+        if (t.phase == ExperimentPhase.Long)
+        {
+            // If delay > 0 it is Async
+            conditionStr = (t.delay > 0) ? "Async" : "Sync";
+        }
+        else
+        {
+            conditionStr = $"{t.delay}ms"; 
+        }
+
+        // Construct the marker string
+        string marker = $"{phaseStr}_{ownerStr}_{conditionStr}_{state}";
+
+        // Send to LSL
+        lslSample[0] = marker;
+        lslOutlet.push_sample(lslSample);
+        
+        Debug.Log($"<color=cyan>[LSL] Sent Marker: {marker}</color>");
+    }
+    
     void InitializeSetupUI()
     {
         setupCanvas.SetActive(true);
@@ -420,6 +451,7 @@ public class ExperimentManager : MonoBehaviour
         PlayBeep(); 
         screenObject.SetActive(true);
         LogEvent(trial, appliedDelay, "Stimulation_Start", "Visuals_On");
+        SendLSLMarker(trial, "Start");
         
         float timer = 0;
         while (timer < trial.duration)
@@ -431,6 +463,7 @@ public class ExperimentManager : MonoBehaviour
         }
 
         screenObject.SetActive(false);
+        SendLSLMarker(trial, "End");
         PlayBeep();
         LogEvent(trial, appliedDelay, "Stimulation_End", "Visuals_Off");
         
