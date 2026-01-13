@@ -105,7 +105,7 @@ public class ExperimentManager : MonoBehaviour
         // Initialize Root Path
         // NOTE: StreamingAssets is read-only folder, works for editor/desktop builds.
         // TODO: consider persistentDataPath is often safer for writing save data, 
-        rootSaveDirectory = Path.Combine(Application.streamingAssetsPath, "Data");
+        rootSaveDirectory = Path.Combine(Application.persistentDataPath, "Data");
     }
     
     private void Start()
