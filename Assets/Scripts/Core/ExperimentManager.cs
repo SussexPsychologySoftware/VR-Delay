@@ -45,7 +45,6 @@ public class ExperimentManager : MonoBehaviour
     [Header("Researcher Dashboard")]
     public GameObject setupCanvas;
     public TMP_Dropdown webcamDropdown;
-    public TMP_Dropdown comPortDropdown;
     public TMP_Dropdown thresholdConditionDropdown;
     public TMP_Dropdown longConditionDropdown;
     public TMP_InputField idInput;
@@ -173,10 +172,10 @@ public class ExperimentManager : MonoBehaviour
         foreach (var d in WebCamTexture.devices) webcamDropdown.options.Add(new TMP_Dropdown.OptionData(d.name));
         webcamDropdown.RefreshShownValue();
 
-        comPortDropdown.ClearOptions();
-        string[] ports = System.IO.Ports.SerialPort.GetPortNames();
-        foreach (var p in ports) comPortDropdown.options.Add(new TMP_Dropdown.OptionData(p));
-        comPortDropdown.RefreshShownValue();
+        // comPortDropdown.ClearOptions();
+        // string[] ports = System.IO.Ports.SerialPort.GetPortNames();
+        // foreach (var p in ports) comPortDropdown.options.Add(new TMP_Dropdown.OptionData(p));
+        // comPortDropdown.RefreshShownValue();
 
         // 4. SET DEFAULT INDICES (Based on Participant Number)
         // A. Threshold: Odd = Self-First (Index 0), Even = Other-First (Index 1)
@@ -246,14 +245,6 @@ public class ExperimentManager : MonoBehaviour
 
     private void SetupParticipantFiles()
     {
-        // Ensure Root Exists
-        if (!Directory.Exists(rootSaveDirectory)) Directory.CreateDirectory(rootSaveDirectory);
-
-        // Generate ID
-        string[] directories = Directory.GetDirectories(rootSaveDirectory, "P*");
-        participantNum = directories.Length + 1;
-        participantID = "P" + participantNum.ToString("000");
-
         // Create Folder
         participantFolder = Path.Combine(rootSaveDirectory, participantID);
         if (!Directory.Exists(participantFolder)) Directory.CreateDirectory(participantFolder);
