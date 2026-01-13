@@ -11,6 +11,7 @@ public class QuestionnaireManager : MonoBehaviour
     [Header("UI Containers")]
     public GameObject thresholdPanel;
     public GameObject longPanel;
+    public ScrollRect longScrollRect;
     
     [Header("Questionnaire Elements")]
     public Slider[] thresholdSliders;  // Drag the 2 sliders here (Ownership, Pleasantness)
@@ -39,6 +40,10 @@ public class QuestionnaireManager : MonoBehaviour
         onCompleteCallback = callback;
         longPanel.SetActive(true);
         thresholdPanel.SetActive(false);
+        if (longScrollRect != null)
+        {
+            longScrollRect.verticalNormalizedPosition = 1f;
+        }
         ResetSliders(longSliders);
     }
     
