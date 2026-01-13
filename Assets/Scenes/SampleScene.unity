@@ -342,9 +342,9 @@ MonoBehaviour:
   m_Value: 0
   m_Options:
     m_Options:
-    - m_Text: 0
+    - m_Text: Self-First
       m_Image: {fileID: 0}
-    - m_Text: 1
+    - m_Text: Other-First
       m_Image: {fileID: 0}
   m_OnValueChanged:
     m_PersistentCalls:
@@ -11244,13 +11244,13 @@ MonoBehaviour:
   m_Value: 0
   m_Options:
     m_Options:
-    - m_Text: 0
+    - m_Text: PS, PA, RA, RS
       m_Image: {fileID: 0}
-    - m_Text: 1
+    - m_Text: PA, RS, PS, RA
       m_Image: {fileID: 0}
-    - m_Text: 2
+    - m_Text: RS, RA, PA, PS
       m_Image: {fileID: 0}
-    - m_Text: 3
+    - m_Text: RA, PS, RS, PA
       m_Image: {fileID: 0}
   m_OnValueChanged:
     m_PersistentCalls:
@@ -14270,19 +14270,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2797231320855107408, guid: 28b83d11a59c3114f9010c500e58cfe3, type: 3}
       propertyPath: m_ContentType
-      value: 2
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2797231320855107408, guid: 28b83d11a59c3114f9010c500e58cfe3, type: 3}
       propertyPath: m_KeyboardType
-      value: 4
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2797231320855107408, guid: 28b83d11a59c3114f9010c500e58cfe3, type: 3}
       propertyPath: m_CharacterLimit
-      value: 3
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2797231320855107408, guid: 28b83d11a59c3114f9010c500e58cfe3, type: 3}
       propertyPath: m_CharacterValidation
-      value: 2
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4455328933991929317, guid: 28b83d11a59c3114f9010c500e58cfe3, type: 3}
       propertyPath: m_AnchorMax.y
@@ -18678,7 +18678,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 0
+  m_text: PS, PA, RA, RS
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -18982,7 +18982,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 0
+  m_text: Self-First
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -20423,6 +20423,8 @@ MonoBehaviour:
   setupCanvas: {fileID: 260884949}
   webcamDropdown: {fileID: 83093382}
   comPortDropdown: {fileID: 1624449791}
+  thresholdConditionDropdown: {fileID: 16829906}
+  longConditionDropdown: {fileID: 1087014532}
   idInput: {fileID: 558578598}
   confirmButton: {fileID: 860252199}
   webcamScript: {fileID: 1582580840}
@@ -20430,7 +20432,7 @@ MonoBehaviour:
   audioSource: {fileID: 2018943631}
   experimenterDisplay: {fileID: 16905136}
   questionnaireScript: {fileID: 565901698}
-  thresholdUI: {fileID: 0}
+  thresholdUI: {fileID: 55414327}
   leftHandController: {fileID: 650961556}
   rightHandController: {fileID: 1740214639}
   maxThresholdDelay: 594
