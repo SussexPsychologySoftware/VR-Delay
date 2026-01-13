@@ -18,7 +18,6 @@ public class ExperimentManager : MonoBehaviour
     public string eventLogPath;
     public string thresholdDataPath;
     public string longDataPath;
-    public string demographicsPath;
     
     // Internal
     private string rootSaveDirectory;
@@ -103,39 +102,20 @@ public class ExperimentManager : MonoBehaviour
     
     public void StartExperiment(ParticipantData demographics)
     {
-        // 1. Create Folders & Files (Using the function we just fixed)
+        // Create Folders & Files (Using the function we just fixed)
         SetupParticipantFiles();
 
-        // 2. Save Demographics (New helper below)
-        SaveDemographicsFile(demographics);
-
-        // 3. Auto-Counterbalance: Odd IDs = Self First, Even IDs = Other First
+        // Auto-Counterbalance: Odd IDs = Self First, Even IDs = Other First
         bool startWithSelf = (participantNum % 2 != 0);
 
-        // 4. Generate the Trials
+        // Generate the Trials
         GenerateAllTrials(startWithSelf);
 
-        // 5. Final UI & Timer Setup
+        // Final UI & Timer Setup
         UpdateExperimenterUI($"ID: {participantID}\nOrder: {(startWithSelf ? "Self-First" : "Other-First")}\n\nPress SPACE to begin.");
         startTime = Time.time;
     
         Debug.Log($"<color=green>Experiment Started. ID: {participantID}. Data saved to: {participantFolder}</color>");
-    }
-
-    // Helper to save demographics to a separate single file
-    private void SaveDemographicsFile(ParticipantData d)
-    {
-        // Header matches the struct fields
-        string header = "ParticipantID,Age,Gender,Handedness,Ethnicity,Alcohol,Cannabis,StartCondition\n";
-    
-        // Determine condition string for the record
-        string startCond = (participantNum % 2 != 0) ? "Self-First" : "Other-First";
-    
-        // Construct the row
-        string row = $"{participantID},{d.Age},{d.Gender},{d.Handedness},{d.Ethnicity},{d.AlcoholFreq},{d.CannabisFreq},{startCond}\n";
-    
-        // Write to file (Path defined in SetupParticipantFiles)
-        File.WriteAllText(demographicsPath, header + row);
     }
 
     private void SetupParticipantFiles()
@@ -158,15 +138,10 @@ public class ExperimentManager : MonoBehaviour
         eventLogPath = Path.Combine(participantFolder, $"{participantID}_{timestamp}_Events.csv");
         thresholdDataPath = Path.Combine(participantFolder, $"{participantID}_{timestamp}_Threshold.csv");
         longDataPath = Path.Combine(participantFolder, $"{participantID}_{timestamp}_Long.csv");
-        demographicsPath = Path.Combine(participantFolder, $"{participantID}_{timestamp}_Demographics.csv");
 
-        // --- WRITE HEADERS (Matches your original format) ---
-        
-        // Fixed: Added ",AppliedDelay" to match the 6 columns in LogEvent
+        // --- WRITE HEADERS ---
         File.WriteAllText(eventLogPath, "Timestamp,Phase,TrialID,Event,Data,AppliedDelay\n");
-
         File.WriteAllText(thresholdDataPath, "ParticipantID,TrialOrder,TrialID,OwnerCondition,DelayMS,Q_SyncBinary,Q_Ownership,Q_Pleasantness\n");
-        
         string qHeaders = "Q1_Alienation,Q2_BodyNotMine,Q3_Numb,Q4_LessVivid,Q5_BodyOwn,Q6_MoveSeen,Q7_NotReal,Q8_Detached,Q9_Pleasant";
         File.WriteAllText(longDataPath, $"ParticipantID,TrialOrder,TrialID,OwnerCondition,DelayType,{qHeaders}\n");
     }
@@ -177,12 +152,9 @@ public class ExperimentManager : MonoBehaviour
         // questionnaireData format: "Yes,0.55,0.82"
         globalTrialCounter++;
         string owner = t.isSelf ? "Self" : "Other";
-
-        // Matches your original format exactly
         string row = $"{participantID},{globalTrialCounter},{t.id},{owner},{t.delay},{questionnaireData}";
 
         File.AppendAllText(thresholdDataPath, row + "\n");
-
         LogEvent(t, appliedDelay, "Data_Saved", "Threshold"); 
     }
     
@@ -194,28 +166,25 @@ public class ExperimentManager : MonoBehaviour
 
         // Logic: If delay > 0, it is Async
         string delayType = (t.delay > 0) ? "Asynchronous" : "Synchronous";
-
         string row = $"{participantID},{globalTrialCounter},{t.id},{owner},{delayType},{questionnaireData}";
-
         File.AppendAllText(longDataPath, row + "\n");
 
         LogEvent(t, appliedDelay, "Data_Saved", "Long");
     }
 
-    // 4. LOG EVENT (Restored Logic)
+    // LOG EVENT
     void LogEvent(TrialData t, float appliedDelay, string eventName, string eventValue)
     {
         // Format: Timestamp, Phase, TrialID, Event, Value, AppliedWebcamDelay
         string row = $"{Time.time - startTime:F3},{t.phase},{t.id},{eventName},{eventValue},{appliedDelay:F3}";
-
         File.AppendAllText(eventLogPath, row + "\n");
     }
     
     private void GenerateAllTrials(bool selfFirst)
     {
-        // --- 1. THRESHOLD TASK (AB vs BA) ---
-        // If selfFirst is true (Odd IDs), we do Self -> Other.
-        // If false (Even IDs), we do Other -> Self.
+        // --- THRESHOLD TASK (AB vs BA) ---
+        // If selfFirst is true (Odd IDs), do Self -> Other.
+        // If false (Even IDs), do Other -> Self.
         if (selfFirst)
         {
             AddThresholdBlock(true);  // Self
@@ -304,34 +273,6 @@ public class ExperimentManager : MonoBehaviour
                 });
             }
         }
-        Shuffle(blockTrials);
-        trialStack.AddRange(blockTrials);
-    }
-    
-    void AddLongBlock(bool isSelf)
-    {
-        List<TrialData> blockTrials = new List<TrialData>();
-        string ownerLabel = isSelf ? "Self" : "Other";
-        
-        // Sync Condition (instant)
-        blockTrials.Add(new TrialData { 
-            id=$"Long_Sync_{ownerLabel}", 
-            phase=ExperimentPhase.Long, 
-            isSelf=isSelf, 
-            delay=0, 
-            duration=longDuration 
-        });
-
-        // Async Condition:
-        // Target is 1.0 second TOTAL (System + Artificial).
-        blockTrials.Add(new TrialData { 
-            id=$"Long_Async_{ownerLabel}", 
-            phase=ExperimentPhase.Long, 
-            isSelf=isSelf, 
-            delay=longAsyncTargetDelay, 
-            duration=longDuration 
-        });
-
         Shuffle(blockTrials);
         trialStack.AddRange(blockTrials);
     }
