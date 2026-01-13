@@ -49,6 +49,7 @@ public class ExperimentManager : MonoBehaviour
     public TMP_Dropdown longConditionDropdown;
     public TMP_InputField idInput;
     public UnityEngine.UI.Button confirmButton;
+    public TMP_InputField latencyInput;
     
     [Header("Components")]
     public WebcamDelay webcamScript;      // Drag the Quad/Script here
@@ -176,7 +177,10 @@ public class ExperimentManager : MonoBehaviour
         // string[] ports = System.IO.Ports.SerialPort.GetPortNames();
         // foreach (var p in ports) comPortDropdown.options.Add(new TMP_Dropdown.OptionData(p));
         // comPortDropdown.RefreshShownValue();
-
+        if (latencyInput != null)
+        {
+            latencyInput.text = estimatedSystemLatency.ToString(); 
+        }
         // 4. SET DEFAULT INDICES (Based on Participant Number)
         // A. Threshold: Odd = Self-First (Index 0), Even = Other-First (Index 1)
         bool isOdd = (nextParticipantNum % 2 != 0);
@@ -201,15 +205,26 @@ public class ExperimentManager : MonoBehaviour
         participantID = idInput.text;
         
         // Initialize Hardware
-        if (webcamDropdown.options.Count > 0)
-            webcamScript.deviceName = webcamDropdown.options[webcamDropdown.value].text;
-        
-        webcamScript.Initialize(); 
+        string selectedCamera = webcamDropdown.options[webcamDropdown.value].text;
+        webcamScript.Initialize(selectedCamera); 
 
         // Read Condition Indices
         bool selfFirst = (thresholdConditionDropdown.value == 0);
         int latinGroupIndex = longConditionDropdown.value;
-
+        
+        // Latency
+        if (latencyInput != null)
+        {
+            if (float.TryParse(latencyInput.text, out float parsedLatency))
+            {
+                estimatedSystemLatency = parsedLatency;
+                Debug.Log($"System Latency updated to: {estimatedSystemLatency}s");
+            }
+            else
+            {
+                Debug.LogWarning($"Invalid Latency format '{latencyInput.text}'. Keeping default: {estimatedSystemLatency}s");
+            }
+        }
         // Hide UI
         setupCanvas.SetActive(false);
 
@@ -417,8 +432,7 @@ public class ExperimentManager : MonoBehaviour
             appliedDelay = Mathf.Max(0f, targetDelaySeconds - estimatedSystemLatency);
         }
         
-        webcamScript.delaySeconds = appliedDelay;
-        webcamScript.useDelay = (appliedDelay > 0.001f); 
+        webcamScript.currentDelaySeconds = appliedDelay;
 
         // UI Updates
         string actor = trial.isSelf ? "PARTICIPANT" : "RESEARCHER";
