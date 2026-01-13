@@ -25,9 +25,16 @@ public class WebcamDelay : MonoBehaviour
     private Queue<Color32[]> frameBuffer = new Queue<Color32[]>();
     private bool isRatioSet = false;
 
-    void Start()
+    public void Initialize()
     {
         screenRenderer = GetComponent<Renderer>();
+    
+        // Safety: If no name was provided, default to the first available
+        if (string.IsNullOrEmpty(deviceName) && WebCamTexture.devices.Length > 0)
+        {
+            deviceName = WebCamTexture.devices[0].name;
+        }
+
         StartWebcam();
     }
 
@@ -44,7 +51,8 @@ public class WebcamDelay : MonoBehaviour
 
     void Update()
     {
-        // 1. Check if webcam has started and we haven't set the size yet
+        if (webcam == null || !webcam.isPlaying) return;
+        // Check if webcam has started and we haven't set the size yet
         if (webcam.didUpdateThisFrame) 
         {
             // Only adjust scale once the camera gives us valid dimensions ( > 100px)
@@ -52,8 +60,7 @@ public class WebcamDelay : MonoBehaviour
             {
                 UpdateAspectRatio();
             }
-
-            // --- Existing Delay Logic ---
+            
             ProcessFrames();
         }
     }
