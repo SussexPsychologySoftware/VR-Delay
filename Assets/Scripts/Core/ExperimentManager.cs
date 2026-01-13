@@ -149,26 +149,26 @@ public class ExperimentManager : MonoBehaviour
     
     public void OnConfirmSettings()
     {
-        // 1. Capture Final Decisions
+        // Capture Final Decisions
         // The researcher might have changed the ID or the dropdowns, 
         // so we trust the UI values over the calculated ones at this point.
         participantID = idInput.text;
         
-        // 2. Initialize Hardware
+        // Initialize Hardware
         if (webcamDropdown.options.Count > 0)
             webcamScript.deviceName = webcamDropdown.options[webcamDropdown.value].text;
         
         webcamScript.Initialize(); 
 
-        // 3. Read Condition Indices
+        // Read Condition Indices
         bool selfFirst = (thresholdConditionDropdown.value == 0);
         int latinGroupIndex = longConditionDropdown.value;
 
-        // 4. Hide UI
+        // Hide UI
         setupCanvas.SetActive(false);
 
-        // 5. Launch Experiment
-        //StartExperiment(selfFirst, latinGroupIndex);
+        // Launch Experiment
+        StartExperiment(selfFirst, latinGroupIndex);
     }
     
     public string PreviewNextParticipantID()
@@ -178,22 +178,23 @@ public class ExperimentManager : MonoBehaviour
         return "P" + (directories.Length + 1).ToString("000");
     }
     
-    public void StartExperiment()
+    public void StartExperiment(bool startWithSelf, int latinGroupIndex)
     {
-        // Create Folders & Files (Using the function we just fixed)
+        // 1. Create Folders & Files
+        // (This still calculates participantNum for folder naming, but won't dictate logic)
         SetupParticipantFiles();
 
-        // Auto-Counterbalance: Odd IDs = Self First, Even IDs = Other First
-        bool startWithSelf = (participantNum % 2 != 0);
+        // 2. Generate the Trials using the PASSED arguments
+        // REMOVED: bool startWithSelf = (participantNum % 2 != 0); 
+        GenerateAllTrials(startWithSelf, latinGroupIndex);
 
-        // Generate the Trials
-        GenerateAllTrials(startWithSelf);
-
-        // Final UI & Timer Setup
-        UpdateExperimenterUI($"ID: {participantID}\nOrder: {(startWithSelf ? "Self-First" : "Other-First")}\n\nPress SPACE to begin.");
+        // 3. Final UI & Timer Setup
+        UpdateExperimenterUI($"ID: {participantID}\nThreshold: {(startWithSelf ? "Self-First" : "Other-First")}\nLong Group: {latinGroupIndex + 1}\n\nPress SPACE to begin.");
+    
         startTime = Time.time;
         hasSetupFinished = true;
-        Debug.Log($"<color=green>Experiment Started. ID: {participantID}. Data saved to: {participantFolder}</color>");
+    
+        Debug.Log($"<color=green>Experiment Started. ID: {participantID}. Group: {latinGroupIndex+1}. Data saved to: {participantFolder}</color>");
     }
 
     private void SetupParticipantFiles()
@@ -258,50 +259,38 @@ public class ExperimentManager : MonoBehaviour
         File.AppendAllText(eventLogPath, row + "\n");
     }
     
-    private void GenerateAllTrials(bool selfFirst)
+    private void GenerateAllTrials(bool selfFirst, int latinGroupIndex)
     {
-        // --- THRESHOLD TASK (AB vs BA) ---
-        // If selfFirst is true (Odd IDs), do Self -> Other.
-        // If false (Even IDs), do Other -> Self.
+        // 1. Threshold Generation
         if (selfFirst)
         {
-            AddThresholdBlock(true);  // Self
-            AddThresholdBlock(false); // Other
+            AddThresholdBlock(true);  
+            AddThresholdBlock(false); 
         }
         else
         {
-            AddThresholdBlock(false); // Other
-            AddThresholdBlock(true);  // Self
+            AddThresholdBlock(false); 
+            AddThresholdBlock(true);  
         }
 
-        // --- 2. LONG TASK (Latin Square) ---
-        // Conditions: 
-        // 0: Self-Sync, 1: Self-Async, 2: Other-Sync, 3: Other-Async
-    
-        // Balanced Latin Square sequence for 4 items: 0, 1, 3, 2
-        // Rows shift by 1 for each group.
+        // 2. Long Generation (Using the UI selection)
         int[][] latinSquare = new int[][]
         {
-            new int[] { 0, 1, 3, 2 }, // Group 1 (P001, P005...)
-            new int[] { 1, 2, 0, 3 }, // Group 2 (P002, P006...)
-            new int[] { 2, 3, 1, 0 }, // Group 3 (P003, P007...)
-            new int[] { 3, 0, 2, 1 }  // Group 4 (P004, P008...)
+            new int[] { 0, 1, 3, 2 }, // Group 1
+            new int[] { 1, 2, 0, 3 }, // Group 2
+            new int[] { 2, 3, 1, 0 }, // Group 3
+            new int[] { 3, 0, 2, 1 }  // Group 4
         };
 
-        // Determine which row to use based on Participant ID
-        // (participantNum - 1) converts P001 to index 0.
-        int rowIndex = (participantNum - 1) % 4; 
-        int[] selectedSequence = latinSquare[rowIndex];
+        // Safety check
+        latinGroupIndex = Mathf.Clamp(latinGroupIndex, 0, 3);
+    
+        int[] selectedSequence = latinSquare[latinGroupIndex];
 
-        Debug.Log($"Long Task Group: {rowIndex + 1} (Sequence: {string.Join(",", selectedSequence)})");
-
-        // Add trials in the specific Latin Square order
         foreach (int conditionIndex in selectedSequence)
         {
             AddLongTrialByIndex(conditionIndex);
         }
-
-        Debug.Log($"Generated Total: {trialStack.Count} trials.");
     }
     
     // Helper to translate the Latin Square Index (0-3) into actual Trial Data
@@ -361,12 +350,9 @@ public class ExperimentManager : MonoBehaviour
         
         if (!isRunning && trialStack.Count > 0)
         {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
                 currentTrial = trialStack[0];
                 trialStack.RemoveAt(0);
                 StartCoroutine(RunTrial(currentTrial));
-            }
         }
         else if (!isRunning && trialStack.Count == 0)
         {
@@ -377,6 +363,7 @@ public class ExperimentManager : MonoBehaviour
     // Timeline of trial
     IEnumerator RunTrial(TrialData trial)
     {
+        Debug.Log("RUNNING TRIAL");
         isRunning = true;
         float appliedDelay = 0f;
         float targetDelaySeconds = trial.delay / 1000f;
