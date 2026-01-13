@@ -402,7 +402,7 @@ public class ExperimentManager : MonoBehaviour
         while (timer < trial.duration)
         {
             timer += Time.deltaTime;
-            UpdateExperimenterUI($"{trial.id}\n{trial.duration - timer:F1}s");
+            UpdateExperimenterUI($"{phase}\n{actor}\n{trial.duration - timer:F1}s");
             if(Input.GetKeyDown(KeyCode.Escape)) { screenObject.SetActive(false); isRunning=false; yield break; }
             yield return null;
         }
