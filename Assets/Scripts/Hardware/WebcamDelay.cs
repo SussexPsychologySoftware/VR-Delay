@@ -1,104 +1,118 @@
 ﻿using UnityEngine;
-using System.Collections.Generic;
+using System.Collections;
 
 public class WebcamDelay : MonoBehaviour
 {
-    [Header("Device Selection")]
-    public string deviceName = ""; 
-    
-    [Header("Display Settings")]
-    [Range(0.1f, 2.0f)] public float viewSize = 0.8f; 
-    
-    [Header("Delay Settings")]
-    public bool useDelay = false;
-    [Range(0f, 3f)] public float delaySeconds = 1.0f;
+    [Header("Configuration")]
+    public int requestWidth = 1920; 
+    public int requestHeight = 1080;
+    public int requestFPS = 60; // Request 60 to force high-speed mode (low exposure/blur)
 
-    [Header("Memory Optimization")]
-    [Tooltip("Downscale the buffer to save VRAM. 0.5 = half resolution (25% memory use).")]
-    [Range(0.1f, 1.0f)] public float bufferScale = 1f;
-    public int targetFPS = 50;
+    [Header("Visual Quality")]
+    [Tooltip("Adjust this slider in real-time to change screen size.")]
+    [Range(0.1f, 5.0f)] public float viewSize = 0.8f;
+    
+    // Trilinear is much smoother for VR than Bilinear
+    public FilterMode textureFilterMode = FilterMode.Trilinear; 
 
+    [Header("Experimental Variables")]
+    [Tooltip("Change this dynamically during the experiment (0 = real-time).")]
+    [Range(0f, 3f)] public float currentDelaySeconds = 0.0f;
+
+    [Tooltip("The maximum delay you will ever test. Memory is reserved for this amount.")]
+    public float maxDelayCap = 3.0f; 
+
+    // Private internals
     private WebCamTexture webcam;
     private Renderer screenRenderer;
     private RenderTexture[] frameBuffer;
     private int writeHead = 0;
     private int bufferSize = 0;
+    private float actualFPS = 30f; 
+    private bool isInitialized = false;
 
-    public void Initialize()
+    // Call this from your ExperimentManager
+    public void Initialize(string selectedDeviceName)
     {
         screenRenderer = GetComponent<Renderer>();
-        if (string.IsNullOrEmpty(deviceName) && WebCamTexture.devices.Length > 0)
-            deviceName = WebCamTexture.devices[0].name;
-
-        StartWebcam();
+        StartCoroutine(StartWebcamRoutine(selectedDeviceName));
     }
 
-    void StartWebcam()
+    IEnumerator StartWebcamRoutine(string deviceName)
     {
-        // Request high res from hardware, but we will downscale for storage
-        webcam = new WebCamTexture(deviceName, 1920, 1080, targetFPS);
+        if (webcam != null) webcam.Stop();
+
+        // 1. Start Camera
+        webcam = new WebCamTexture(deviceName, requestWidth, requestHeight, requestFPS);
         webcam.Play();
-        StartCoroutine(SetupBuffer());
-    }
 
-    System.Collections.IEnumerator SetupBuffer()
-    {
-        while (webcam.width < 100) yield return null;
+        // 2. Wait for hardware initialization (Crucial for resolution)
+        float timeout = 5.0f;
+        while (webcam.width < 100 && timeout > 0) 
+        {
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
 
-        // Calculate downscaled dimensions
-        int bWidth = Mathf.RoundToInt(webcam.width * bufferScale);
-        int bHeight = Mathf.RoundToInt(webcam.height * bufferScale);
+        if (webcam.width < 100)
+        {
+            Debug.LogError($"Failed to start webcam: {deviceName}");
+            yield break;
+        }
 
-        // Pre-allocate the GPU Ring Buffer
-        bufferSize = targetFPS * 4; // Buffer for up to 4 seconds
+        // 3. LOG ACTUAL RESOLUTION (Check your Console!)
+        // If this says 640x480, your USB port is too slow or the camera is in USB 2.0 mode.
+        Debug.Log($"<color=green>Webcam Active: {webcam.width}x{webcam.height} @ {webcam.requestedFPS} FPS</color>");
+        
+        // 4. Setup Ring Buffer
+        actualFPS = webcam.requestedFPS > 0 ? webcam.requestedFPS : 30f;
+        int safeFPS = Mathf.Max((int)actualFPS, 60); 
+        
+        bufferSize = Mathf.CeilToInt(maxDelayCap * safeFPS) + safeFPS; 
         frameBuffer = new RenderTexture[bufferSize];
 
         for (int i = 0; i < bufferSize; i++)
         {
-            // Create small, efficient textures
-            frameBuffer[i] = new RenderTexture(bWidth, bHeight, 0);
-            frameBuffer[i].filterMode = FilterMode.Bilinear; // Smooths out the downscaling
+            // ARGB32 = High quality, uncompressed.
+            frameBuffer[i] = new RenderTexture(webcam.width, webcam.height, 0, RenderTextureFormat.ARGB32);
+            frameBuffer[i].filterMode = textureFilterMode;
             frameBuffer[i].Create();
         }
-
-        // Apply Aspect Ratio
-        float aspect = (float)webcam.width / webcam.height;
-        transform.localScale = new Vector3(viewSize * aspect, viewSize, 1f);
+        
+        isInitialized = true;
     }
 
     void Update()
     {
-        if (webcam == null || !webcam.isPlaying) return;
-        if (!webcam.didUpdateThisFrame) return;
+        if (!isInitialized || !webcam.didUpdateThisFrame) return;
 
-        // DETERMINING THE BYPASS
-        // If delay is off or set to 0, we show the raw webcam feed directly
-        bool isBypassActive = !useDelay || delaySeconds <= 0.01f;
-
-        if (isBypassActive)
+        // --- UPDATE VIEW SIZE REALTIME ---
+        // We calculate this every frame so you can adjust the slider in the Inspector
+        if (webcam.height > 0)
         {
-            // SPEED: Directly pipe the webcam texture to the material
-            screenRenderer.material.mainTexture = webcam;
-        
-            // Optional: We stop writing to the buffer to save GPU cycles
-            return; 
+            float aspect = (float)webcam.width / webcam.height;
+            transform.localScale = new Vector3(viewSize * aspect, viewSize, 1f);
         }
 
-        // DELAY LOGIC (Only runs if delay is active)
-        if (frameBuffer == null) return;
-
-        // 1. Write to buffer
+        // --- BUFFER LOGIC ---
+        // A. Write to Buffer 
         Graphics.Blit(webcam, frameBuffer[writeHead]);
 
-        // 2. Calculate Read Head
-        int framesToDelay = Mathf.RoundToInt(delaySeconds * targetFPS);
-        framesToDelay = Mathf.Clamp(framesToDelay, 1, bufferSize - 1);
-        int readHead = (writeHead - framesToDelay + bufferSize) % bufferSize;
+        // B. Read from Buffer (Delay Logic)
+        if (currentDelaySeconds <= 0.02f) 
+        {
+            screenRenderer.material.mainTexture = frameBuffer[writeHead];
+        }
+        else
+        {
+            int framesToDelay = Mathf.RoundToInt(currentDelaySeconds * actualFPS);
+            framesToDelay = Mathf.Clamp(framesToDelay, 0, bufferSize - 1);
+            
+            int readHead = (writeHead - framesToDelay + bufferSize) % bufferSize;
+            screenRenderer.material.mainTexture = frameBuffer[readHead];
+        }
 
-        // 3. Display from buffer
-        screenRenderer.material.mainTexture = frameBuffer[readHead];
-
-        // 4. Advance Write Head
+        // C. Advance Write Head
         writeHead = (writeHead + 1) % bufferSize;
     }
 
