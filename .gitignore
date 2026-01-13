@@ -266,3 +266,6 @@ $RECYCLE.BIN/
 .idea
 Assets/StreamingAssets/Data/*
 !Assets/StreamingAssets/Data/.gitkeep
+# Ignore pyenv
+Hardware_Tools/venv/
+Hardware_Tools/__pycache__/
