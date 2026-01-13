@@ -51,6 +51,7 @@ public class ExperimentManager : MonoBehaviour
     public UnityEngine.UI.Button confirmButton;
     public TMP_InputField latencyInput;
     public UnityEngine.UI.Slider viewSizeSlider;
+    public TMP_Text viewSizeLabel;
     
     [Header("Components")]
     public WebcamDelay webcamScript;      // Drag the Quad/Script here
@@ -193,15 +194,24 @@ public class ExperimentManager : MonoBehaviour
         longConditionDropdown.value = (nextParticipantNum - 1) % 4;
         longConditionDropdown.RefreshShownValue();
         
-// 5. SETUP SLIDER (View Size)
         if (viewSizeSlider != null)
         {
-            // Sync slider with current script value
-            viewSizeSlider.value = webcamScript.viewSize;
+            // 1. Sync slider to current script value
+            float currentVal = webcamScript.viewSize;
+            viewSizeSlider.value = currentVal;
+            
+            // 2. Set initial label text (e.g., "0.80")
+            if (viewSizeLabel != null) 
+                viewSizeLabel.text = "Webcam Size: " + currentVal.ToString("F2");
+
+            // 3. Listener: Update Script AND Label when dragged
             viewSizeSlider.onValueChanged.RemoveAllListeners();
             viewSizeSlider.onValueChanged.AddListener((val) => 
             {
                 if (webcamScript != null) webcamScript.viewSize = val;
+                
+                if (viewSizeLabel != null) 
+                    viewSizeLabel.text = "Webcam Size: " + val.ToString("F2");
             });
         }
 
