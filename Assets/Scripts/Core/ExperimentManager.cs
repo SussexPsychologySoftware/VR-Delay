@@ -45,6 +45,8 @@ public class ExperimentManager : MonoBehaviour
     public GameObject setupCanvas;
     public TMP_Dropdown webcamDropdown;
     public TMP_Dropdown comPortDropdown;
+    public TMP_Dropdown thresholdConditionDropdown;
+    public TMP_Dropdown longConditionDropdown;
     public TMP_InputField idInput;
     public UnityEngine.UI.Button confirmButton;
     
@@ -111,50 +113,64 @@ public class ExperimentManager : MonoBehaviour
     {
         setupCanvas.SetActive(true);
 
-        // 1. Auto-Populate ID
-        idInput.text = PreviewNextParticipantID();
+        // 1. CALCULATE PARTICIPANT NUMBER
+        // Check the Data folder to count existing participants
+        if (!Directory.Exists(rootSaveDirectory)) Directory.CreateDirectory(rootSaveDirectory);
+        string[] directories = Directory.GetDirectories(rootSaveDirectory);
+        
+        int nextParticipantNum = directories.Length + 1; 
 
-        // 2. Populate Webcams
+        // GENERATE ID STRING
+        idInput.text = "P" + nextParticipantNum.ToString("000");
+
+        // POPULATE HARDWARE LISTS (Must be dynamic)
         webcamDropdown.ClearOptions();
-        foreach (var d in WebCamTexture.devices) 
-            webcamDropdown.options.Add(new TMP_Dropdown.OptionData(d.name));
+        foreach (var d in WebCamTexture.devices) webcamDropdown.options.Add(new TMP_Dropdown.OptionData(d.name));
         webcamDropdown.RefreshShownValue();
 
-        // 3. Populate COM Ports (Requires API Level .NET Framework)
         comPortDropdown.ClearOptions();
         string[] ports = System.IO.Ports.SerialPort.GetPortNames();
-        foreach (var p in ports) 
-            comPortDropdown.options.Add(new TMP_Dropdown.OptionData(p));
+        foreach (var p in ports) comPortDropdown.options.Add(new TMP_Dropdown.OptionData(p));
         comPortDropdown.RefreshShownValue();
 
-        // 4. Bind Button
+        // 4. SET DEFAULT INDICES (Based on Participant Number)
+        // A. Threshold: Odd = Self-First (Index 0), Even = Other-First (Index 1)
+        bool isOdd = (nextParticipantNum % 2 != 0);
+        thresholdConditionDropdown.value = isOdd ? 0 : 1;
+        thresholdConditionDropdown.RefreshShownValue();
+
+        // B. Long: Cycle 0-3 based on participant number
+        // P1=0, P2=1, P3=2, P4=3, P5=0...
+        longConditionDropdown.value = (nextParticipantNum - 1) % 4;
+        longConditionDropdown.RefreshShownValue();
+
+        // 5. BIND CONFIRM BUTTON
         confirmButton.onClick.RemoveAllListeners();
         confirmButton.onClick.AddListener(OnConfirmSettings);
     }
     
     public void OnConfirmSettings()
     {
-        // A. Capture Settings
+        // 1. Capture Final Decisions
+        // The researcher might have changed the ID or the dropdowns, 
+        // so we trust the UI values over the calculated ones at this point.
         participantID = idInput.text;
-    
-        // Set Webcam Name (ExperimentManager pushes this to WebcamDelay)
+        
+        // 2. Initialize Hardware
         if (webcamDropdown.options.Count > 0)
-        {
-            string selectedCam = webcamDropdown.options[webcamDropdown.value].text;
-            webcamScript.deviceName = selectedCam;
-        }
-    
-        // (Future) Set COM Port for LSL/Oximeter
-        // string selectedCom = comPortDropdown.options[comPortDropdown.value].text;
+            webcamScript.deviceName = webcamDropdown.options[webcamDropdown.value].text;
+        
+        webcamScript.Initialize(); 
 
-        // Initialize Hardware
-        webcamScript.Initialize(); // Manually start the webcam now
+        // 3. Read Condition Indices
+        bool selfFirst = (thresholdConditionDropdown.value == 0);
+        int latinGroupIndex = longConditionDropdown.value;
 
-        // Hide UI (Or switch to a smaller "Status" view)
+        // 4. Hide UI
         setupCanvas.SetActive(false);
 
-        // Start the Logic
-        StartExperiment(); 
+        // 5. Launch Experiment
+        //StartExperiment(selfFirst, latinGroupIndex);
     }
     
     public string PreviewNextParticipantID()
