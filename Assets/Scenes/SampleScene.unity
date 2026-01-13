@@ -9445,12 +9445,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: afb4512dfdde435ea9982f7c18d97028, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  deviceName: 
-  viewSize: 0.66
-  useDelay: 0
-  delaySeconds: 0
-  bufferScale: 1
-  targetFPS: 50
+  requestWidth: 1920
+  requestHeight: 1080
+  requestFPS: 60
+  viewSize: 0.65
+  textureFilterMode: 2
+  currentDelaySeconds: 0
+  maxDelayCap: 2
 --- !u!64 &1582580841
 MeshCollider:
   m_ObjectHideFlags: 0
