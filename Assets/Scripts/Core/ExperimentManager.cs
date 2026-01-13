@@ -356,7 +356,7 @@ public class ExperimentManager : MonoBehaviour
         }
         else if (!isRunning && trialStack.Count == 0)
         {
-            UpdateExperimenterUI("EXPERIMENT COMPLETE.");
+            UpdateExperimenterUI($"EXPERIMENT COMPLETE.\nID: {participantID}");
         }
     }
     
