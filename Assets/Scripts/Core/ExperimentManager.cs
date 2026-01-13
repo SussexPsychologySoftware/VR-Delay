@@ -22,7 +22,7 @@ public class ExperimentManager : MonoBehaviour
     // Internal
     private string rootSaveDirectory;
     private int participantNum;
-    
+    private bool hasSetupFinished = false;
     private List<TrialData> trialStack = new List<TrialData>();
     private int globalTrialCounter = 0;
     private float startTime;
@@ -104,8 +104,6 @@ public class ExperimentManager : MonoBehaviour
     
     private void Start()
     {
-        // Do NOT call StartExperiment() yet.
-        // Instead, initialize the UI.
         InitializeSetupUI();
     }
     
@@ -194,7 +192,7 @@ public class ExperimentManager : MonoBehaviour
         // Final UI & Timer Setup
         UpdateExperimenterUI($"ID: {participantID}\nOrder: {(startWithSelf ? "Self-First" : "Other-First")}\n\nPress SPACE to begin.");
         startTime = Time.time;
-    
+        hasSetupFinished = true;
         Debug.Log($"<color=green>Experiment Started. ID: {participantID}. Data saved to: {participantFolder}</color>");
     }
 
@@ -359,6 +357,8 @@ public class ExperimentManager : MonoBehaviour
     
     void Update()
     {
+        if (!hasSetupFinished) return;
+        
         if (!isRunning && trialStack.Count > 0)
         {
             if (Input.GetKeyDown(KeyCode.Space))
