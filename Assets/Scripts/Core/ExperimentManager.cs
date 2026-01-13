@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine.XR.Interaction.Toolkit;
+using LSL;
 
 public class ExperimentManager : MonoBehaviour
 {
@@ -74,6 +75,12 @@ public class ExperimentManager : MonoBehaviour
     public float ISI = 1.0f;
     public float estimatedSystemLatency = 0.134f;
      
+    [Header("LSL Settings")]
+    public string lslStreamName = "RubberHandEvents";
+    public string lslStreamType = "Markers";
+    private StreamOutlet lslOutlet;
+    private string[] lslSample = new string[1]; // Buffer for sending data
+    
     [System.Serializable]
     public struct TrialType
     {
