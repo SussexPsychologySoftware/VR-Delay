@@ -50,6 +50,7 @@ public class ExperimentManager : MonoBehaviour
     public TMP_InputField idInput;
     public UnityEngine.UI.Button confirmButton;
     public TMP_InputField latencyInput;
+    public UnityEngine.UI.Slider viewSizeSlider;
     
     [Header("Components")]
     public WebcamDelay webcamScript;      // Drag the Quad/Script here
@@ -191,6 +192,37 @@ public class ExperimentManager : MonoBehaviour
         // P1=0, P2=1, P3=2, P4=3, P5=0...
         longConditionDropdown.value = (nextParticipantNum - 1) % 4;
         longConditionDropdown.RefreshShownValue();
+        
+// 5. SETUP SLIDER (View Size)
+        if (viewSizeSlider != null)
+        {
+            // Sync slider with current script value
+            viewSizeSlider.value = webcamScript.viewSize;
+            viewSizeSlider.onValueChanged.RemoveAllListeners();
+            viewSizeSlider.onValueChanged.AddListener((val) => 
+            {
+                if (webcamScript != null) webcamScript.viewSize = val;
+            });
+        }
+
+        // 6. AUTO-START PREVIEW (The "By Default" logic)
+        screenObject.SetActive(true); // Turn on the Quad
+        
+        // Start the camera immediately with the default option
+        if (webcamDropdown.options.Count > 0)
+        {
+            string defaultCam = webcamDropdown.options[0].text;
+            webcamScript.Initialize(defaultCam);
+        }
+
+        // 7. HANDLE WEBCAM CHANGES
+        // If the researcher picks a different camera, restart immediately
+        webcamDropdown.onValueChanged.RemoveAllListeners();
+        webcamDropdown.onValueChanged.AddListener((index) => 
+        {
+            string newCam = webcamDropdown.options[index].text;
+            webcamScript.Initialize(newCam);
+        });
 
         // 5. BIND CONFIRM BUTTON
         confirmButton.onClick.RemoveAllListeners();
@@ -206,8 +238,8 @@ public class ExperimentManager : MonoBehaviour
         
         // Initialize Hardware
         string selectedCamera = webcamDropdown.options[webcamDropdown.value].text;
-        webcamScript.Initialize(selectedCamera); 
-
+        webcamScript.Initialize(selectedCamera);
+        
         // Read Condition Indices
         bool selfFirst = (thresholdConditionDropdown.value == 0);
         int latinGroupIndex = longConditionDropdown.value;
