@@ -111,7 +111,16 @@ public class ExperimentManager : MonoBehaviour
     
     private void Start()
     {
+        InitializeLSL();
         InitializeSetupUI();
+    }
+    
+    void InitializeLSL()
+    {
+        // Define the stream info: Name, Type, Channel Count (1), Rate (0=Irregular/Event), Format (String)
+        StreamInfo streamInfo = new StreamInfo(lslStreamName, lslStreamType, 1, 0, channel_format_t.cf_string);
+        lslOutlet = new StreamOutlet(streamInfo);
+        Debug.Log($"LSL Stream '{lslStreamName}' created.");
     }
     
     void InitializeSetupUI()
