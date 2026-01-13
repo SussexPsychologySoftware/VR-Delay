@@ -193,7 +193,7 @@ public class ExperimentManager : MonoBehaviour
     
         startTime = Time.time;
         hasSetupFinished = true;
-    
+        screenObject.SetActive(true);
         Debug.Log($"<color=green>Experiment Started. ID: {participantID}. Group: {latinGroupIndex+1}. Data saved to: {participantFolder}</color>");
     }
 
@@ -363,8 +363,8 @@ public class ExperimentManager : MonoBehaviour
     // Timeline of trial
     IEnumerator RunTrial(TrialData trial)
     {
-        Debug.Log("RUNNING TRIAL");
         isRunning = true;
+        screenObject.SetActive(false);
         float appliedDelay = 0f;
         float targetDelaySeconds = trial.delay / 1000f;
         
