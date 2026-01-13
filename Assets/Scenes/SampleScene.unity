@@ -11760,10 +11760,10 @@ MonoBehaviour:
   rightHandController: {fileID: 1740214639}
   maxThresholdDelay: 594
   longAsyncTargetDelay: 1000
-  nThresholdSteps: 2
-  thresholdRepetitions: 1
+  nThresholdSteps: 10
+  thresholdRepetitions: 4
   thresholdDuration: 7
-  longDuration: 6
+  longDuration: 60
   ISI: 1
   estimatedSystemLatency: 0.134
   lslStreamName: RubberHandEvents
