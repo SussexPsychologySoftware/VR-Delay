@@ -9901,7 +9901,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1294877988}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: DemographicsForm, Assembly-CSharp
         m_MethodName: OnStartClicked
         m_Mode: 1
@@ -12976,7 +12976,6 @@ GameObject:
   - component: {fileID: 1294877986}
   - component: {fileID: 1294877985}
   - component: {fileID: 1294877984}
-  - component: {fileID: 1294877988}
   m_Layer: 5
   m_Name: PC Only Canvas
   m_TagString: Untagged
@@ -13069,27 +13068,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
---- !u!114 &1294877988
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1294877983}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 318b80c5f895449d9c8cb90ba8d66a57, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  setupPanel: {fileID: 1251246479}
-  statusText: {fileID: 16905136}
-  ageInput: {fileID: 1739113384}
-  educationInput: {fileID: 1324787342}
-  genderDropdown: {fileID: 106334264}
-  handednessDropdown: {fileID: 1760894679}
-  ethnicityDropdown: {fileID: 375608878}
-  alcoholDropdown: {fileID: 1959947835}
-  cannabisDropdown: {fileID: 1091107023}
 --- !u!1 &1301437707
 GameObject:
   m_ObjectHideFlags: 0
@@ -13430,17 +13408,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1313726636}
   m_CullTransparentMesh: 1
---- !u!114 &1324787342 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2797231320855107408, guid: 28b83d11a59c3114f9010c500e58cfe3, type: 3}
-  m_PrefabInstance: {fileID: 1009161656}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2da0c512f12947e489f739169773d7ca, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &1338290916
 GameObject:
   m_ObjectHideFlags: 0
@@ -15491,7 +15458,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1294877988}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: DemographicsForm, Assembly-CSharp
         m_MethodName: OnStartClicked
         m_Mode: 1
@@ -16584,7 +16551,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1582580840
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -17951,17 +17918,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1726356566}
   m_CullTransparentMesh: 1
---- !u!114 &1739113384 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2797231320855107408, guid: 28b83d11a59c3114f9010c500e58cfe3, type: 3}
-  m_PrefabInstance: {fileID: 1294374792923458394}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2da0c512f12947e489f739169773d7ca, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &1740214639
 GameObject:
   m_ObjectHideFlags: 0
