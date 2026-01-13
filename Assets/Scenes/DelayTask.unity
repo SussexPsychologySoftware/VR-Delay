@@ -3093,6 +3093,17 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 392710404}
   m_CullTransparentMesh: 1
+--- !u!114 &402269524 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5549490748457903622, guid: 28b83d11a59c3114f9010c500e58cfe3, type: 3}
+  m_PrefabInstance: {fileID: 1485730413}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &409086907
 GameObject:
   m_ObjectHideFlags: 0
@@ -12526,6 +12537,7 @@ MonoBehaviour:
   confirmButton: {fileID: 860252199}
   latencyInput: {fileID: 1777755876}
   viewSizeSlider: {fileID: 771911219}
+  viewSizeLabel: {fileID: 402269524}
   webcamScript: {fileID: 1582580840}
   screenObject: {fileID: 1582580839}
   audioSource: {fileID: 2018943631}
