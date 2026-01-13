@@ -16551,7 +16551,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1582580840
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -20372,10 +20372,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   participantID: test01
-  participantFolder: 
-  eventLogPath: 
-  thresholdDataPath: 
-  longDataPath: 
   setupCanvas: {fileID: 260884949}
   webcamDropdown: {fileID: 83093382}
   comPortDropdown: {fileID: 1624449791}
