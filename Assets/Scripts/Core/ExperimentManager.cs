@@ -14,10 +14,10 @@ public class ExperimentManager : MonoBehaviour
     
     // PUBLIC DATA PATH ACCESSORS
     public string participantID;      
-    public string participantFolder; 
-    public string eventLogPath;
-    public string thresholdDataPath;
-    public string longDataPath;
+    private string participantFolder; 
+    private string eventLogPath;
+    private string thresholdDataPath;
+    private string longDataPath;
     
     // Internal
     private string rootSaveDirectory;
