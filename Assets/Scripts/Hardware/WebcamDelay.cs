@@ -1,71 +1,98 @@
 ﻿using UnityEngine;
+using UnityEngine.UI; 
 using System.Collections;
+using Serenegiant; // Required for AndroidUtils
 
 public class WebcamDelay : MonoBehaviour
 {
+    [Header("UVC Connection")]
+    [Tooltip("Drag the RawImage from your Canvas here. The UVC plugin draws to this, and we will steal the texture from it.")]
+    public RawImage uvcRawImage;
+
     [Header("Configuration")]
-    public int requestWidth = 1920; 
-    public int requestHeight = 1080;
-    public int requestFPS = 60; // Request 60 to force high-speed mode (low exposure/blur)
+    public int requestFPS = 60; 
 
     [Header("Visual Quality")]
-    [Tooltip("Adjust this slider in real-time to change screen size.")]
     [Range(0.1f, 5.0f)] public float viewSize = 0.8f;
-    
-    // Trilinear is much smoother for VR than Bilinear
     public FilterMode textureFilterMode = FilterMode.Trilinear; 
 
-    [Header("Experimental Variables")]
-    [Tooltip("Change this dynamically during the experiment (0 = real-time).")]
+    [Header("Delay Settings")]
     [Range(0f, 3f)] public float currentDelaySeconds = 0.0f;
-
-    [Tooltip("The maximum delay you will ever test. Memory is reserved for this amount.")]
     public float maxDelayCap = 3.0f; 
 
-    // Private internals
-    private WebCamTexture webcam;
+    // Internal Variables
     private Renderer screenRenderer;
     private RenderTexture[] frameBuffer;
     private int writeHead = 0;
     private int bufferSize = 0;
-    private float actualFPS = 30f; 
+    private float actualFPS = 60f; 
     private bool isInitialized = false;
 
-    // Call this from your ExperimentManager
-    public void Initialize(string selectedDeviceName)
+    // --- INITIALIZATION ---
+    // This is called by ExperimentManager.cs
+    // We keep the 'deviceName' argument to prevent errors, but we ignore it 
+    // because we are forcing the UVC connection on Quest.
+    public void Initialize(string deviceNameIgnored = "")
     {
+        // Prevent double-initialization
+        StopAllCoroutines();
+        isInitialized = false;
+
         screenRenderer = GetComponent<Renderer>();
-        StartCoroutine(StartWebcamRoutine(selectedDeviceName));
+        
+        // Start the Quest-specific startup sequence
+        StartCoroutine(StartupRoutine());
     }
 
-    IEnumerator StartWebcamRoutine(string deviceName)
+    IEnumerator StartupRoutine()
     {
-        if (webcam != null) webcam.Stop();
+        Debug.Log("WebcamDelay: Requesting Android Permissions...");
 
-        // 1. Start Camera
-        webcam = new WebCamTexture(deviceName, requestWidth, requestHeight, requestFPS);
-        webcam.Play();
+        // 1. Ask for Android Permissions
+        // We use a flag to wait for the callback
+        bool permissionCheckDone = false;
+        bool permissionGranted = false;
 
-        // 2. Wait for hardware initialization (Crucial for resolution)
-        float timeout = 5.0f;
-        while (webcam.width < 100 && timeout > 0) 
+        yield return AndroidUtils.GrantCameraPermission((permission, result) => 
         {
-            timeout -= Time.deltaTime;
-            yield return null;
-        }
+            if (result == AndroidUtils.PermissionGrantResult.PERMISSION_GRANT)
+                permissionGranted = true;
+            
+            permissionCheckDone = true;
+        });
 
-        if (webcam.width < 100)
+        // Wait for callback to finish (just in case)
+        while (!permissionCheckDone) yield return null;
+
+        if (!permissionGranted)
         {
-            Debug.LogError($"Failed to start webcam: {deviceName}");
+            Debug.LogError("WebcamDelay: Camera Permission Denied! Script stopped.");
             yield break;
         }
 
-        // 3. LOG ACTUAL RESOLUTION (Check your Console!)
-        // If this says 640x480, your USB port is too slow or the camera is in USB 2.0 mode.
-        Debug.Log($"<color=green>Webcam Active: {webcam.width}x{webcam.height} @ {webcam.requestedFPS} FPS</color>");
-        
-        // 4. Setup Ring Buffer
-        actualFPS = webcam.requestedFPS > 0 ? webcam.requestedFPS : 30f;
+        // 2. Permission granted, now wait for the hardware to start
+        Debug.Log("WebcamDelay: Waiting for UVC Texture...");
+        yield return WaitForUVCTexture();
+    }
+
+    IEnumerator WaitForUVCTexture()
+    {
+        // 3. Wait until the UVC plugin has actually created a valid texture
+        while (uvcRawImage == null || uvcRawImage.texture == null || uvcRawImage.texture.width < 100)
+        {
+            yield return null; 
+        }
+
+        Debug.Log($"<color=green>UVC Camera Found: {uvcRawImage.texture.width}x{uvcRawImage.texture.height}</color>");
+
+        // 4. Initialize the Buffer
+        SetupBuffer(uvcRawImage.texture.width, uvcRawImage.texture.height);
+        isInitialized = true;
+    }
+
+    void SetupBuffer(int width, int height)
+    {
+        actualFPS = requestFPS > 0 ? requestFPS : 60f;
         int safeFPS = Mathf.Max((int)actualFPS, 60); 
         
         bufferSize = Mathf.CeilToInt(maxDelayCap * safeFPS) + safeFPS; 
@@ -73,32 +100,32 @@ public class WebcamDelay : MonoBehaviour
 
         for (int i = 0; i < bufferSize; i++)
         {
-            // ARGB32 = High quality, uncompressed.
-            frameBuffer[i] = new RenderTexture(webcam.width, webcam.height, 0, RenderTextureFormat.ARGB32);
+            frameBuffer[i] = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32);
             frameBuffer[i].filterMode = textureFilterMode;
             frameBuffer[i].Create();
         }
-        
-        isInitialized = true;
     }
 
+    // --- MAIN LOOP ---
     void Update()
     {
-        if (!isInitialized || !webcam.didUpdateThisFrame) return;
+        // Stop if not ready or if the texture vanished (unplugged)
+        if (!isInitialized || uvcRawImage.texture == null) return;
 
-        // --- UPDATE VIEW SIZE REALTIME ---
-        // We calculate this every frame so you can adjust the slider in the Inspector
-        if (webcam.height > 0)
+        Texture source = uvcRawImage.texture;
+
+        // --- UPDATE VIEW SIZE ---
+        if (source.height > 0)
         {
-            float aspect = (float)webcam.width / webcam.height;
+            float aspect = (float)source.width / source.height;
             transform.localScale = new Vector3(viewSize * aspect, viewSize, 1f);
         }
 
         // --- BUFFER LOGIC ---
-        // A. Write to Buffer 
-        Graphics.Blit(webcam, frameBuffer[writeHead]);
+        // A. Copy current Webcam frame to Ring Buffer
+        Graphics.Blit(source, frameBuffer[writeHead]);
 
-        // B. Read from Buffer (Delay Logic)
+        // B. Read from Ring Buffer (Delay Logic)
         if (currentDelaySeconds <= 0.02f) 
         {
             screenRenderer.material.mainTexture = frameBuffer[writeHead];
@@ -112,13 +139,12 @@ public class WebcamDelay : MonoBehaviour
             screenRenderer.material.mainTexture = frameBuffer[readHead];
         }
 
-        // C. Advance Write Head
+        // C. Advance Head
         writeHead = (writeHead + 1) % bufferSize;
     }
 
     void OnDestroy()
     {
-        if (webcam != null) webcam.Stop();
         if (frameBuffer != null)
         {
             foreach (var rt in frameBuffer) if (rt != null) rt.Release();
