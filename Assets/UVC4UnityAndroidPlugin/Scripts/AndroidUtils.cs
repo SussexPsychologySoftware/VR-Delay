@@ -329,3 +329,4 @@ namespace Serenegiant
 	} // class AndroidUtils
 
 } // namespace Serenegiant
+
