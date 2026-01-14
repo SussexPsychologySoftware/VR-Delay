@@ -9,5 +9,6 @@ EditorBuildSettings:
     path: Assets/Scenes/DelayTask.unity
     guid: 9fc0d4010bbf28b4594072e72b8655ab
   m_configObjects:
+    Unity.XR.Oculus.Settings: {fileID: 11400000, guid: 17b73d48d2740461faf085a73cccefdb, type: 2}
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 015166a0067b3d645bdb5b2fc3d28a24, type: 2}
     com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 0ed46aa3b6217e946a187844237e5f20, type: 2}
