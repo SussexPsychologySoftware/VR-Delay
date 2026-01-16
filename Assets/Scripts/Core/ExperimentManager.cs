@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine.XR.Interaction.Toolkit;
 using LSL;
+using UnityEngine.Serialization;
 
 public class ExperimentManager : MonoBehaviour
 {
@@ -50,7 +51,7 @@ public class ExperimentManager : MonoBehaviour
     public TMP_InputField idInput;
     public UnityEngine.UI.Button confirmButton;
     public TMP_InputField latencyInput;
-    public UnityEngine.UI.Slider viewSizeSlider;
+    public TMP_InputField sizeInput;
     public TMP_Text viewSizeLabel;
     
     [Header("Components")]
@@ -194,24 +195,25 @@ public class ExperimentManager : MonoBehaviour
         longConditionDropdown.value = (nextParticipantNum - 1) % 4;
         longConditionDropdown.RefreshShownValue();
         
-        if (viewSizeSlider != null)
+        if (sizeInput != null)
         {
-            // 1. Sync slider to current script value
-            float currentVal = webcamScript.viewSize;
-            viewSizeSlider.value = currentVal;
-            
-            // 2. Set initial label text (e.g., "0.80")
-            if (viewSizeLabel != null) 
-                viewSizeLabel.text = "Webcam Size: " + currentVal.ToString("F2");
+            // 1. LOAD SAVED VALUE (Default to 1.0 if nothing saved)
+            float savedSize = PlayerPrefs.GetFloat("WebcamScale", 1.0f);
 
-            // 3. Listener: Update Script AND Label when dragged
-            viewSizeSlider.onValueChanged.RemoveAllListeners();
-            viewSizeSlider.onValueChanged.AddListener((val) => 
+            // 2. Apply to UI and Script immediately
+            sizeInput.text = savedSize.ToString("F2");
+            if (webcamScript != null) webcamScript.viewSize = savedSize;
+            if (viewSizeLabel != null) viewSizeLabel.text = "Webcam Size: " + savedSize.ToString("F2");
+
+            // 3. Listener: Update Script live while typing
+            sizeInput.onValueChanged.RemoveAllListeners();
+            sizeInput.onValueChanged.AddListener((valStr) => 
             {
-                if (webcamScript != null) webcamScript.viewSize = val;
-                
-                if (viewSizeLabel != null) 
-                    viewSizeLabel.text = "Webcam Size: " + val.ToString("F2");
+                if (float.TryParse(valStr, out float newVal))
+                {
+                    if (webcamScript != null) webcamScript.viewSize = newVal;
+                    if (viewSizeLabel != null) viewSizeLabel.text = "Webcam Size: " + newVal.ToString("F2");
+                }
             });
         }
 
@@ -266,6 +268,18 @@ public class ExperimentManager : MonoBehaviour
             {
                 Debug.LogWarning($"Invalid Latency format '{latencyInput.text}'. Keeping default: {estimatedSystemLatency}s");
             }
+        }
+        
+        if (sizeInput != null && float.TryParse(sizeInput.text, out float finalSize))
+        {
+            // Clamp to prevent invisible or massive screens (0.1x to 5.0x)
+            finalSize = Mathf.Clamp(finalSize, 0.1f, 5.0f); 
+    
+            PlayerPrefs.SetFloat("WebcamScale", finalSize);
+            PlayerPrefs.Save(); // Force write to disk
+
+            // Ensure script has final value
+            webcamScript.viewSize = finalSize;
         }
         // Hide UI
         setupCanvas.SetActive(false);
