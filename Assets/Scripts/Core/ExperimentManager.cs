@@ -486,7 +486,8 @@ public class ExperimentManager : MonoBehaviour
     IEnumerator RunTrial(TrialData trial)
     {
         isRunning = true;
-        screenObject.SetActive(false);
+        if (!screenObject.activeSelf) screenObject.SetActive(true); // Ensure script is running
+        webcamScript.SetVisuals(false);
         float appliedDelay = 0f;
         float targetDelaySeconds = trial.delay / 1000f;
         
@@ -513,17 +514,19 @@ public class ExperimentManager : MonoBehaviour
             // Allow Researcher to toggle camera to check setup
             if (Input.GetKeyDown(KeyCode.C))
             {
-                screenObject.SetActive(!screenObject.activeSelf);
+                bool current = webcamScript.IsVisualsEnabled();
+                webcamScript.SetVisuals(!current);
             }
             yield return null;
         }
+        webcamScript.SetVisuals(false);
         LogEvent(trial, appliedDelay, "Trial_Start", "Intention");
         UpdateExperimenterUI("Running...");
         
         yield return new WaitForSeconds(ISI);
         
         PlayBeep(); 
-        screenObject.SetActive(true);
+        webcamScript.SetVisuals(true);
         LogEvent(trial, appliedDelay, "Stimulation_Start", "Visuals_On");
         SendLSLMarker(trial, "Start");
         
@@ -532,11 +535,19 @@ public class ExperimentManager : MonoBehaviour
         {
             timer += Time.deltaTime;
             UpdateExperimenterUI($"{phase}\n{actor}\n{trial.duration - timer:F1}s");
-            if(Input.GetKeyDown(KeyCode.Escape)) { screenObject.SetActive(false); isRunning=false; yield break; }
+            if(Input.GetKeyDown(KeyCode.Escape)) 
+            { 
+                // --- CHANGE 4: EMERGENCY EXIT ---
+                // OLD: screenObject.SetActive(false); 
+                // NEW:
+                webcamScript.SetVisuals(false);
+                isRunning=false; 
+                yield break; 
+            }
             yield return null;
         }
 
-        screenObject.SetActive(false);
+        webcamScript.SetVisuals(false);       
         SendLSLMarker(trial, "End");
         PlayBeep();
         LogEvent(trial, appliedDelay, "Stimulation_End", "Visuals_Off");

@@ -124,4 +124,17 @@ public class WebcamDelay : MonoBehaviour
             foreach (var rt in frameBuffer) if (rt != null) rt.Release();
         }
     }
+    
+    public void SetVisuals(bool isVisible)
+    {
+        if (screenRenderer != null)
+        {
+            screenRenderer.enabled = isVisible;
+        }
+    }
+    
+    public bool IsVisualsEnabled()
+    {
+        return screenRenderer != null && screenRenderer.enabled;
+    }
 }
