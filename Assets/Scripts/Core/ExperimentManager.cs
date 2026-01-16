@@ -182,7 +182,14 @@ public class ExperimentManager : MonoBehaviour
         // comPortDropdown.RefreshShownValue();
         if (latencyInput != null)
         {
-            latencyInput.text = estimatedSystemLatency.ToString(); 
+            // 1. LOAD SAVED LATENCY (Default to your script's default 0.134f if nothing saved)
+            float savedLatency = PlayerPrefs.GetFloat("SystemLatency", estimatedSystemLatency);
+    
+            // 2. Update the variable immediately so the experiment is ready
+            estimatedSystemLatency = savedLatency;
+
+            // 3. Update the UI text
+            latencyInput.text = savedLatency.ToString(); 
         }
         // 4. SET DEFAULT INDICES (Based on Participant Number)
         // A. Threshold: Odd = Self-First (Index 0), Even = Other-First (Index 1)
@@ -261,12 +268,18 @@ public class ExperimentManager : MonoBehaviour
         {
             if (float.TryParse(latencyInput.text, out float parsedLatency))
             {
+                // Update the runtime variable
                 estimatedSystemLatency = parsedLatency;
-                Debug.Log($"System Latency updated to: {estimatedSystemLatency}s");
+        
+                // SAVE TO PLAYER PREFS
+                PlayerPrefs.SetFloat("SystemLatency", parsedLatency);
+                PlayerPrefs.Save(); // Force write to disk
+
+                Debug.Log($"System Latency updated and saved: {estimatedSystemLatency}s");
             }
             else
             {
-                Debug.LogWarning($"Invalid Latency format '{latencyInput.text}'. Keeping default: {estimatedSystemLatency}s");
+                Debug.LogWarning($"Invalid Latency format '{latencyInput.text}'. Keeping previous: {estimatedSystemLatency}s");
             }
         }
         
