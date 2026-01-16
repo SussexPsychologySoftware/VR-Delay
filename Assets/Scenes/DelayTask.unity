@@ -3668,6 +3668,7 @@ GameObject:
   - component: {fileID: 565901695}
   - component: {fileID: 565901698}
   - component: {fileID: 565901699}
+  - component: {fileID: 565901700}
   m_Layer: 5
   m_Name: QuestionnaireCanvas
   m_TagString: Untagged
@@ -3791,6 +3792,21 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   m_RaycastTriggerInteraction: 1
+--- !u!114 &565901700
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565901693}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4be932670c2345bdb3a51a268ae014ab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  distance: 1.5
+  smoothTime: 0.3
+  heightOffset: -0.1
 --- !u!1 &580282883
 GameObject:
   m_ObjectHideFlags: 0
