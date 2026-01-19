@@ -9349,7 +9349,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 358648897270350714, guid: 316c0ff5cf488754eb3f294c21adfffe, type: 3}
       propertyPath: m_text
-      value: The experience felt pleseant.
+      value: The experience felt pleasant.
       objectReference: {fileID: 0}
     - target: {fileID: 1354833558284330887, guid: 316c0ff5cf488754eb3f294c21adfffe, type: 3}
       propertyPath: m_Pivot.x
