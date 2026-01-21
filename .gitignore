@@ -270,3 +270,4 @@ Assets/StreamingAssets/Data/*
 LSL/venv/
 LSL/__pycache__/
 VR Delay.zip
+.DS_Store
