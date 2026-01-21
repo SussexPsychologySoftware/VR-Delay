@@ -114,6 +114,7 @@ public class ExperimentManager : MonoBehaviour
     
     private void Start()
     {
+        SetControllersActive(false)
         InitializeLSL();
         InitializeSetupUI();
     }
@@ -588,11 +589,36 @@ public class ExperimentManager : MonoBehaviour
 
     void UpdateExperimenterUI(string message) { if (experimenterDisplay != null) experimenterDisplay.text = message; }
     void PlayBeep() { if(audioSource) audioSource.Play(); }
+    
     void SetControllersActive(bool isActive)
     {
-        if(leftHandController) leftHandController.SetActive(isActive);
-        if(rightHandController) rightHandController.SetActive(isActive);
+        GameObject[] controllers = new GameObject[] { leftHandController, rightHandController };
+
+        foreach (var controllerGO in controllers)
+        {
+            if (controllerGO == null) continue;
+            // Always on - so 'XR Controller (Action-based)' script keeps tracking position.
+            controllerGO.SetActive(true);
+            // Toggle the Ray Interactor - stops controller from interacting
+            var rayInteractor = controllerGO.GetComponent<XRRayInteractor>();
+            if (rayInteractor != null) rayInteractor.enabled = isActive;
+            // Toggle Laser
+            var lineVisual = controllerGO.GetComponent<XRInteractorLineVisual>();
+            if (lineVisual != null) lineVisual.enabled = isActive;
+            var lineRenderer = controllerGO.GetComponent<LineRenderer>();
+            if (lineRenderer != null) lineRenderer.enabled = isActive;
+            // Toggle Controller 3D Model
+            var renderers = controllerGO.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers)
+            {
+                if (r != lineRenderer) // So we don't double set it
+                {
+                    r.enabled = isActive;
+                }
+            }
+        }
     }
+    
     void Shuffle<T>(List<T> list)
     {
         for (int i = 0; i < list.Count; i++) { T temp = list[i]; int r = UnityEngine.Random.Range(i, list.Count); list[i] = list[r]; list[r] = temp; }
