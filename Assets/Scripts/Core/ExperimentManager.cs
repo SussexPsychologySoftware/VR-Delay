@@ -114,7 +114,7 @@ public class ExperimentManager : MonoBehaviour
     
     private void Start()
     {
-        SetControllersActive(false)
+        SetControllersActive(false);
         InitializeLSL();
         InitializeSetupUI();
     }
