@@ -1,0 +1,20 @@
+﻿<!DOCTYPE html>
+<html>
+<body style="background-color:black; margin:0; overflow:hidden;" onkeydown="flash(event)">
+<div id="box" style="width:100vw; height:100vh; background-color:black;"></div>
+
+<script>
+    // Press SPACE to flash Green
+    function flash(e) {
+        if (e.code === 'Space') {
+            var box = document.getElementById('box');
+            // Switch to Green instantly
+            box.style.backgroundColor = '#00FF00';
+
+            // Optional: Turn off after 100ms so you can test again
+            setTimeout(() => { box.style.backgroundColor = 'black'; }, 100);
+        }
+    }
+</script>
+</body>
+</html>
