@@ -503,8 +503,6 @@ public class ExperimentManager : MonoBehaviour
             appliedDelay = Mathf.Max(0f, targetDelaySeconds - estimatedSystemLatency);
         }
         
-        webcamScript.currentDelaySeconds = appliedDelay;
-
         // UI Updates
         string actor = trial.isSelf ? "PARTICIPANT" : "RESEARCHER";
         string phase = trial.phase == ExperimentPhase.Threshold ? "THRESHOLD" : "LONG";
@@ -515,11 +513,14 @@ public class ExperimentManager : MonoBehaviour
             // Allow Researcher to toggle camera to check setup
             if (Input.GetKeyDown(KeyCode.C))
             {
+				webcamScript.currentDelaySeconds = 0.0f; // remove delay for testing
                 bool current = webcamScript.IsVisualsEnabled();
                 webcamScript.SetVisuals(!current);
             }
             yield return null;
         }
+
+        webcamScript.currentDelaySeconds = appliedDelay;
         webcamScript.SetVisuals(false);
         LogEvent(trial, appliedDelay, "Trial_Start", "Intention");
         UpdateExperimenterUI("Running...");
