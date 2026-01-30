@@ -31,16 +31,17 @@ public class ExperimentManager : MonoBehaviour
     private bool isRunning = false;
     private TrialData currentTrial;
 
-    public enum ExperimentPhase { Threshold, Long }
+    public enum ExperimentPhase { Practice, Threshold, Long }
     
     [System.Serializable]
     public class TrialData
     {
         public string id;             // e.g. "Threshold_66ms"
-        public ExperimentPhase phase; // Threshold or Long
+        public ExperimentPhase phase; // Practice, Threshold or Long
         public bool isSelf;           // True = Participant strokes, False = Researcher strokes
         public int delay;             // In milliseconds
         public float duration;        // 7s or 60s
+        public bool isPractice;       // Helper flag to skip data saving
     }
     
     [Header("Researcher Dashboard")]
@@ -77,6 +78,7 @@ public class ExperimentManager : MonoBehaviour
     public float longDuration = 6.0f;
     public float ISI = 1.0f;
     public float estimatedSystemLatency = 0.134f;
+    public float practiceDuration = 7.0f; // New Setting
      
     [Header("LSL Settings")]
     public string lslStreamName = "RubberHandEvents";
@@ -320,8 +322,8 @@ public class ExperimentManager : MonoBehaviour
         GenerateAllTrials(startWithSelf, latinGroupIndex);
 
         // 3. Final UI & Timer Setup
-        UpdateExperimenterUI($"ID: {participantID}\nThreshold: {(startWithSelf ? "Self-First" : "Other-First")}\nLong Group: {latinGroupIndex + 1}\n\nPress SPACE to begin.");
-    
+        UpdateExperimenterUI($"ID: {participantID}\nStarting with PRACTICE.\n\nPress SPACE to begin.");
+        
         startTime = Time.time;
         hasSetupFinished = true;
         screenObject.SetActive(true);
@@ -351,6 +353,7 @@ public class ExperimentManager : MonoBehaviour
     // SAVE DATA ROWS
     void SaveThresholdRow(TrialData t, string questionnaireData, float appliedDelay)
     {
+        if (t.isPractice) return; // skip if practice trial
         // questionnaireData format: "Yes,0.55,0.82"
         globalTrialCounter++;
         string owner = t.isSelf ? "Self" : "Other";
@@ -384,6 +387,8 @@ public class ExperimentManager : MonoBehaviour
     
     private void GenerateAllTrials(bool selfFirst, int latinGroupIndex)
     {
+        AddPracticeBlock();
+        
         // 1. Threshold Generation
         if (selfFirst)
         {
@@ -416,6 +421,23 @@ public class ExperimentManager : MonoBehaviour
         }
     }
     
+    // Add practice
+    void AddPracticeBlock()
+    {
+        for (int i = 1; i <= 3; i++)
+        {
+            trialStack.Add(new TrialData
+            {
+                id = $"Practice_{i}",
+                phase = ExperimentPhase.Practice,
+                isSelf = true, // Default to Self for practice
+                delay = 0,     // No delay
+                duration = practiceDuration,
+                isPractice = true
+            });
+        }
+    }
+    
     // Helper to translate the Latin Square Index (0-3) into actual Trial Data
     private void AddLongTrialByIndex(int index)
     {
@@ -435,7 +457,8 @@ public class ExperimentManager : MonoBehaviour
             phase = ExperimentPhase.Long, 
             isSelf = isSelf, 
             delay = delay, 
-            duration = longDuration 
+            duration = longDuration,
+            isPractice = false
         });
     }
     
@@ -459,7 +482,8 @@ public class ExperimentManager : MonoBehaviour
                     phase = ExperimentPhase.Threshold,
                     isSelf = isSelf,
                     delay = trialDelay, 
-                    duration = thresholdDuration
+                    duration = thresholdDuration,
+                    isPractice = false
                 });
             }
         }
@@ -496,12 +520,17 @@ public class ExperimentManager : MonoBehaviour
         {
             appliedDelay = targetDelaySeconds;
         }
-        else
+        else if (trial.phase == ExperimentPhase.Long)
         {
             // LONG: We want a specific TOTAL experience (Target).
             // Applied = Target - System
             appliedDelay = Mathf.Max(0f, targetDelaySeconds - estimatedSystemLatency);
         }
+        else if (trial.phase == ExperimentPhase.Practice)
+        {
+            appliedDelay = Mathf.Max(0f, targetDelaySeconds - estimatedSystemLatency);
+        }
+        
         
         // UI Updates
         string actor = trial.isSelf ? "PARTICIPANT" : "RESEARCHER";
@@ -561,23 +590,28 @@ public class ExperimentManager : MonoBehaviour
         bool qAnswered = false;
 
         // CHECK PHASE AND SHOW CORRECT UI
-        if (trial.phase == ExperimentPhase.Threshold)
+        if (trial.phase == ExperimentPhase.Threshold || trial.phase == ExperimentPhase.Practice)
         {
             questionnaireScript.ShowThresholdQuestionnaire((resultString) => 
             {
                 // resultString example: "Yes,0.45,0.12"
-                SaveThresholdRow(trial, resultString, appliedDelay);
+                if (!trial.isPractice) SaveThresholdRow(trial, resultString, appliedDelay);
+                qAnswered = true;
+            });
+        }
+        else if (trial.phase == ExperimentPhase.Long)
+        {
+            questionnaireScript.ShowLongQuestionnaire((resultString) => 
+            {
+                // resultString example: "0.1,0.2,0.3,..."
+                if (!trial.isPractice) SaveLongRow(trial, resultString, appliedDelay);
                 qAnswered = true;
             });
         }
         else
         {
-            questionnaireScript.ShowLongQuestionnaire((resultString) => 
-            {
-                // resultString example: "0.1,0.2,0.3,..."
-                SaveLongRow(trial, resultString, appliedDelay);
-                qAnswered = true;
-            });
+            Debug.Log($"INCORRECT TRIAL PHASE! {trial}");
+            UpdateExperimenterUI($"INCORRECT TRIAL PHASE! {trial}");
         }
 
         // Wait here until the callback above sets qAnswered = true
