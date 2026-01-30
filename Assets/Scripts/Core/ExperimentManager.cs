@@ -531,6 +531,7 @@ public class ExperimentManager : MonoBehaviour
             appliedDelay = Mathf.Max(0f, targetDelaySeconds - estimatedSystemLatency);
         }
         
+        Debug.Log($"<color=yellow>[TRIAL SETUP] ID: {trial.id} | Target: {targetDelaySeconds:F3}s | System Latency: {estimatedSystemLatency:F3}s | <b>APPLIED DELAY: {appliedDelay:F3}s</b></color>");
         
         // UI Updates
         string actor = trial.isSelf ? "PARTICIPANT" : "RESEARCHER";
