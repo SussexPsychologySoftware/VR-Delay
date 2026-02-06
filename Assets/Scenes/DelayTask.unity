@@ -3895,8 +3895,8 @@ MonoBehaviour:
   thresholdSliders:
   - {fileID: 1025200970}
   - {fileID: 989757544}
-  yesButton: {fileID: 1511851870}
-  noButton: {fileID: 621303727}
+  yesButton: {fileID: 621303727}
+  noButton: {fileID: 1511851870}
   longSliders:
   - {fileID: 851572108}
   - {fileID: 692842153}
