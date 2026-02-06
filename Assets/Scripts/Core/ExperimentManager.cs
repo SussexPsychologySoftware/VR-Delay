@@ -535,9 +535,11 @@ public class ExperimentManager : MonoBehaviour
         
         // UI Updates
         string actor = trial.isSelf ? "PARTICIPANT" : "RESEARCHER";
-        string phase = trial.phase == ExperimentPhase.Threshold ? "THRESHOLD" : "LONG";
-        
+        string phase = "PRACTICE"; 
+        if (trial.phase == ExperimentPhase.Threshold) phase = "THRESHOLD";
+        else if (trial.phase == ExperimentPhase.Long) phase = "LONG";
         UpdateExperimenterUI($"Phase: {phase}\n\nNext actor: {actor}\n\nPress 'Space' when ready.");
+        
         while (!Input.GetKeyDown(KeyCode.Space))
         {
             // Allow Researcher to toggle camera to check setup
