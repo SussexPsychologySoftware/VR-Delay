@@ -134,8 +134,8 @@ public class ExperimentManager : MonoBehaviour
     // Examples: "Long_Self_Async_Start", "Threshold_Other_Sync_End"
     void SendLSLMarker(TrialData t, string state)
     {
-        if (lslOutlet == null) return;
-
+        if (lslOutlet == null || t.phase == ExperimentPhase.Practice) return;
+        
         string phaseStr = t.phase == ExperimentPhase.Threshold ? "Threshold" : "Long";
         string ownerStr = t.isSelf ? "Self" : "Other";
         string conditionStr = "Sync"; // Default for Threshold
