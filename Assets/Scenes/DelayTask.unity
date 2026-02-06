@@ -12626,6 +12626,7 @@ MonoBehaviour:
   longDuration: 60
   ISI: 1
   estimatedSystemLatency: 0.134
+  practiceDuration: 7
   lslStreamName: RubberHandEvents
   lslStreamType: Markers
 --- !u!4 &2018943630
