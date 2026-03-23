@@ -4,8 +4,8 @@ using System.Collections;
 public class WebcamDelay : MonoBehaviour
 {
     [Header("Configuration")]
-    public int requestWidth = 1920; 
-    public int requestHeight = 1080;
+    public int requestWidth = 1280; 
+    public int requestHeight = 720;
     public int requestFPS = 60; // Request 60 to force high-speed mode (low exposure/blur)
 
     [Header("Visual Quality")]
