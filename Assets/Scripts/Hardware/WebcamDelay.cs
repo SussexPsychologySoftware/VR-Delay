@@ -17,10 +17,10 @@ public class WebcamDelay : MonoBehaviour
 
     [Header("Experimental Variables")]
     [Tooltip("Change this dynamically during the experiment (0 = real-time).")]
-    [Range(0f, 3f)] public float currentDelaySeconds = 0.0f;
+    [Range(0f, 1.5f)] public float currentDelaySeconds = 0.0f;
 
     [Tooltip("The maximum delay you will ever test. Memory is reserved for this amount.")]
-    public float maxDelayCap = 3.0f; 
+    public float maxDelayCap = 1.5f; 
 
     // Private internals
     private WebCamTexture webcam;
