@@ -30,12 +30,20 @@ public class WebcamDelay : MonoBehaviour
     private int bufferSize = 0;
     private float actualFPS = 30f; 
     private bool isInitialized = false;
+    private Coroutine activeRoutine; // Track so we can cancel on re-init
 
     // Call this from your ExperimentManager
     public void Initialize(string selectedDeviceName)
     {
         screenRenderer = GetComponent<Renderer>();
-        StartCoroutine(StartWebcamRoutine(selectedDeviceName));
+        
+        // Stop any in-progress startup coroutine so we don't get two running
+        if (activeRoutine != null) StopCoroutine(activeRoutine);
+        
+        // Release old resources BEFORE allocating new ones
+        CleanupResources();
+        
+        activeRoutine = StartCoroutine(StartWebcamRoutine(selectedDeviceName));
     }
     
     // Centralised cleanup — called on re-init AND on destroy
@@ -58,11 +66,11 @@ public class WebcamDelay : MonoBehaviour
     {
         // CleanupResources() already stopped old webcam and released old buffers
 
-        // 1. Start Camera
+        // Start Camera
         webcam = new WebCamTexture(deviceName, requestWidth, requestHeight, requestFPS);
         webcam.Play();
 
-        // 2. Wait for hardware initialization (Crucial for resolution)
+        // Wait for hardware initialization (Crucial for resolution)
         float timeout = 5.0f;
         while (webcam.width < 100 && timeout > 0) 
         {
@@ -76,11 +84,11 @@ public class WebcamDelay : MonoBehaviour
             yield break;
         }
 
-        // 3. LOG ACTUAL RESOLUTION (Check your Console!)
-        // If this says 640x480, your USB port is too slow or the camera is in USB 2.0 mode.
+        // LOG ACTUAL RESOLUTION (Check console!)
+        // If this says 640x480, USB port is too slow or the camera is in USB 2.0 mode.
         Debug.Log($"<color=green>Webcam Active: {webcam.width}x{webcam.height} @ {webcam.requestedFPS} FPS</color>");
         
-        // 4. Setup Ring Buffer
+        // Setup Ring Buffer
         actualFPS = webcam.requestedFPS > 0 ? webcam.requestedFPS : 30f;
         int safeFPS = Mathf.Max((int)actualFPS, 60); 
         
