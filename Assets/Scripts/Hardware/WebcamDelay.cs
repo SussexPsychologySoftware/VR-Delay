@@ -37,10 +37,26 @@ public class WebcamDelay : MonoBehaviour
         screenRenderer = GetComponent<Renderer>();
         StartCoroutine(StartWebcamRoutine(selectedDeviceName));
     }
+    
+    // Centralised cleanup — called on re-init AND on destroy
+    private void CleanupResources()
+    {
+        isInitialized = false;
+        writeHead = 0;
+        
+        if (webcam != null) { webcam.Stop(); webcam = null; }
+        
+        if (frameBuffer != null)
+        {
+            foreach (var rt in frameBuffer)
+                if (rt != null) rt.Release();
+            frameBuffer = null;
+        }
+    }
 
     IEnumerator StartWebcamRoutine(string deviceName)
     {
-        if (webcam != null) webcam.Stop();
+        // CleanupResources() already stopped old webcam and released old buffers
 
         // 1. Start Camera
         webcam = new WebCamTexture(deviceName, requestWidth, requestHeight, requestFPS);
@@ -119,11 +135,7 @@ public class WebcamDelay : MonoBehaviour
 
     void OnDestroy()
     {
-        if (webcam != null) webcam.Stop();
-        if (frameBuffer != null)
-        {
-            foreach (var rt in frameBuffer) if (rt != null) rt.Release();
-        }
+        CleanupResources();
     }
     
     public void SetVisuals(bool isVisible)
