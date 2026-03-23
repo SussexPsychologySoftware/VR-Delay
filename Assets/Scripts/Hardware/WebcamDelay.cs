@@ -73,8 +73,9 @@ public class WebcamDelay : MonoBehaviour
 
         for (int i = 0; i < bufferSize; i++)
         {
-            // ARGB32 = High quality, uncompressed.
-            frameBuffer[i] = new RenderTexture(webcam.width, webcam.height, 0, RenderTextureFormat.ARGB32);
+            // RGB565 = 2 bytes/pixel (vs 4 for ARGB32). No alpha needed for webcam.
+            // Halves VRAM usage per texture. Visually imperceptible for a live hand feed.
+            frameBuffer[i] = new RenderTexture(webcam.width, webcam.height, 0, RenderTextureFormat.RGB565);
             frameBuffer[i].filterMode = textureFilterMode;
             frameBuffer[i].Create();
         }
