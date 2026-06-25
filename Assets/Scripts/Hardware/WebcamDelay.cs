@@ -31,6 +31,17 @@ public class WebcamDelay : MonoBehaviour
     private float actualFPS = 30f; 
     private bool isInitialized = false;
     private Coroutine activeRoutine; // Track so we can cancel on re-init
+    private Coroutine fpsRoutine;    // Periodic actual-FPS logger
+
+    // Optional UI hook: invoked with a human-readable status only on connection state
+    // changes (never per-frame). Assign directly, e.g. cam.OnStatusChanged = lbl.SetText.
+    public System.Action<string> OnStatusChanged;
+
+    private void SetStatus(string msg)
+    {
+        Debug.Log($"[Webcam] {msg}");
+        OnStatusChanged?.Invoke(msg);
+    }
 
     // Call this from your ExperimentManager
     public void Initialize(string selectedDeviceName)
@@ -52,6 +63,8 @@ public class WebcamDelay : MonoBehaviour
         isInitialized = false;
         writeHead = 0;
         
+        if (fpsRoutine != null) { StopCoroutine(fpsRoutine); fpsRoutine = null; }
+
         if (webcam != null) { webcam.Stop(); webcam = null; }
         
         if (frameBuffer != null)
@@ -66,27 +79,56 @@ public class WebcamDelay : MonoBehaviour
     {
         // CleanupResources() already stopped old webcam and released old buffers
 
-        // Start Camera
-        webcam = new WebCamTexture(deviceName, requestWidth, requestHeight, requestFPS);
-        webcam.Play();
+        // The camera/driver often loses an enumeration race on a cold start (especially
+        // with ALVR + SteamVR also spinning up): the stream opens then immediately dies
+        // (green LED flashes then goes dark). Rather than give up — which leaves a white
+        // screen and forces an app restart — retry a few times, letting the bus settle
+        // between attempts. We always request the SAME format (60 FPS) so capture rate is
+        // identical for every participant; we never silently fall back to a lower rate.
+        const int maxAttempts = 5;
+        const float timeoutPerAttempt = 8.0f; // cold-start enumeration can exceed 5s
 
-        // Wait for hardware initialization (Crucial for resolution)
-        float timeout = 5.0f;
-        while (webcam.width < 100 && timeout > 0) 
+        bool connected = false;
+        for (int attempt = 1; attempt <= maxAttempts && !connected; attempt++)
         {
-            timeout -= Time.deltaTime;
-            yield return null;
+            SetStatus($"Connecting to camera... (attempt {attempt}/{maxAttempts})");
+
+            webcam = new WebCamTexture(deviceName, requestWidth, requestHeight, requestFPS);
+            webcam.Play();
+
+            // Success = resolution populated AND a real frame actually arrived.
+            // (Checking width alone can pass for a stream that opened then died.)
+            float timeout = timeoutPerAttempt;
+            while ((webcam.width < 100 || !webcam.didUpdateThisFrame) && timeout > 0)
+            {
+                timeout -= Time.deltaTime;
+                yield return null;
+            }
+
+            if (webcam.width >= 100 && webcam.didUpdateThisFrame)
+            {
+                connected = true;
+                break;
+            }
+
+            // This attempt failed — tear down and let the driver/USB settle before retrying.
+            Debug.LogWarning($"Webcam attempt {attempt} failed (stream didn't start). Retrying...");
+            webcam.Stop();
+            webcam = null;
+            yield return new WaitForSeconds(1.0f);
         }
 
-        if (webcam.width < 100)
+        if (!connected)
         {
-            Debug.LogError($"Failed to start webcam: {deviceName}");
+            Debug.LogError($"Failed to start webcam after {maxAttempts} attempts: {deviceName}");
+            SetStatus("Camera failed to start. Press Reconnect to try again.");
             yield break;
         }
 
         // LOG ACTUAL RESOLUTION (Check console!)
         // If this says 640x480, USB port is too slow or the camera is in USB 2.0 mode.
-        Debug.Log($"<color=green>Webcam Active: {webcam.width}x{webcam.height} @ {webcam.requestedFPS} FPS</color>");
+        Debug.Log($"<color=green>Webcam Active: {webcam.width}x{webcam.height} @ {webcam.requestedFPS} FPS (requested)</color>");
+        SetStatus($"Connected: {webcam.width}x{webcam.height}");
         
         // Setup Ring Buffer
         actualFPS = webcam.requestedFPS > 0 ? webcam.requestedFPS : 30f;
@@ -105,6 +147,31 @@ public class WebcamDelay : MonoBehaviour
         }
         
         isInitialized = true;
+
+        // requestedFPS above is only what we asked for. Log what the camera actually
+        // delivers so we can confirm every participant is captured at the same rate (60).
+        fpsRoutine = StartCoroutine(ReportActualFPS());
+    }
+
+    // One-shot check at startup: counts how many frames the webcam genuinely refreshed
+    // over a short window and logs the real capture FPS once, so you can confirm 60 at
+    // connect time. Deliberately does NOT run during the experiment — no periodic logging
+    // that could cause a frame hitch and disturb the delay timing.
+    IEnumerator ReportActualFPS()
+    {
+        yield return new WaitForSeconds(1.0f); // let the stream stabilise first
+
+        int frames = 0;
+        float elapsed = 0f;
+        while (elapsed < 2.0f && isInitialized && webcam != null)
+        {
+            if (webcam.didUpdateThisFrame) frames++;
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (elapsed > 0f)
+            Debug.Log($"Webcam actual capture rate: {(frames / elapsed):F1} FPS (measured at startup)");
     }
 
     void Update()

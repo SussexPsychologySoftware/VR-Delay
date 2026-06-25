@@ -51,6 +51,8 @@ public class ExperimentManager : MonoBehaviour
     public TMP_Dropdown longConditionDropdown;
     public TMP_InputField idInput;
     public UnityEngine.UI.Button confirmButton;
+    public UnityEngine.UI.Button reconnectButton; // Manual camera (re)connect if auto-start fails
+    public TMP_Text webcamStatusLabel;            // Shows Connecting / Connected / Failed
     public TMP_InputField latencyInput;
     public TMP_InputField sizeInput;
     public TMP_Text viewSizeLabel;
@@ -229,7 +231,23 @@ public class ExperimentManager : MonoBehaviour
 
         // 6. AUTO-START PREVIEW (The "By Default" logic)
         screenObject.SetActive(true); // Turn on the Quad
-        
+
+        // Route webcam connection status to the on-screen label (direct assignment is
+        // idempotent, so re-running this setup never stacks duplicate handlers).
+        if (webcamStatusLabel != null && webcamScript != null)
+            webcamScript.OnStatusChanged = (msg) => { webcamStatusLabel.text = msg; };
+
+        // Manual (re)connect button — recovers from a failed auto-start without an app restart.
+        if (reconnectButton != null)
+        {
+            reconnectButton.onClick.RemoveAllListeners();
+            reconnectButton.onClick.AddListener(() =>
+            {
+                string cam = webcamDropdown.options[webcamDropdown.value].text;
+                webcamScript.Initialize(cam);
+            });
+        }
+
         // Start the camera immediately with the default option
         if (webcamDropdown.options.Count > 0)
         {
