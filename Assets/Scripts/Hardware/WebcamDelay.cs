@@ -26,9 +26,13 @@ public class WebcamDelay : MonoBehaviour
     private WebCamTexture webcam;
     private Renderer screenRenderer;
     private RenderTexture[] frameBuffer;
+    private float[] frameTimes;    // Capture time (Time.time) per slot, parallel to frameBuffer.
+                                   // Lets us select the delayed frame by ELAPSED TIME rather than
+                                   // by counting frames, so the delay is correct regardless of the
+                                   // camera's actual/variable capture rate.
     private int writeHead = 0;
     private int bufferSize = 0;
-    private float actualFPS = 30f; 
+    private float actualFPS = 30f; // Only used for buffer SIZING now, not for the delay itself.
     private bool isInitialized = false;
     private Coroutine activeRoutine; // Track so we can cancel on re-init
     private Coroutine fpsRoutine;    // Periodic actual-FPS logger
@@ -79,6 +83,8 @@ public class WebcamDelay : MonoBehaviour
                 if (rt != null) rt.Release();
             frameBuffer = null;
         }
+
+        frameTimes = null;
     }
 
     IEnumerator StartWebcamRoutine(string deviceName)
@@ -140,8 +146,9 @@ public class WebcamDelay : MonoBehaviour
         actualFPS = webcam.requestedFPS > 0 ? webcam.requestedFPS : 30f;
         int safeFPS = Mathf.Max((int)actualFPS, 60); 
         
-        bufferSize = Mathf.CeilToInt(maxDelayCap * safeFPS) + safeFPS; 
+        bufferSize = Mathf.CeilToInt(maxDelayCap * safeFPS) + safeFPS;
         frameBuffer = new RenderTexture[bufferSize];
+        frameTimes = new float[bufferSize];
 
         for (int i = 0; i < bufferSize; i++)
         {
@@ -154,6 +161,9 @@ public class WebcamDelay : MonoBehaviour
             // first trial pulls from slots that were Create()d but never written — i.e.
             // uninitialised GPU memory (black/garbage) — until the write head laps the buffer.
             Graphics.Blit(webcam, frameBuffer[i]);
+            // Stamp the primed frames in the past so the time-based read treats them as old
+            // (valid to show for any delay) until real, freshly-timed frames replace them.
+            frameTimes[i] = Time.time - maxDelayCap;
         }
 
         isInitialized = true;
@@ -197,20 +207,27 @@ public class WebcamDelay : MonoBehaviour
         }
 
         // --- BUFFER LOGIC ---
-        // A. Write to Buffer 
+        // A. Write current frame to buffer, timestamped with when we received it.
         Graphics.Blit(webcam, frameBuffer[writeHead]);
+        frameTimes[writeHead] = Time.time;
 
         // B. Read from Buffer (Delay Logic)
-        if (currentDelaySeconds <= 0.02f) 
+        if (currentDelaySeconds <= 0.02f)
         {
             screenRenderer.material.mainTexture = frameBuffer[writeHead];
         }
         else
         {
-            int framesToDelay = Mathf.RoundToInt(currentDelaySeconds * actualFPS);
-            framesToDelay = Mathf.Clamp(framesToDelay, 0, bufferSize - 1);
-            
-            int readHead = (writeHead - framesToDelay + bufferSize) % bufferSize;
+            // Time-based selection: show the NEWEST frame that is at least currentDelaySeconds
+            // old. Walking back by real timestamps (rather than delay * fps) makes the applied
+            // delay correct no matter the camera's actual or varying capture rate.
+            float targetTime = Time.time - currentDelaySeconds;
+            int readHead = writeHead; // fallback: newest frame if none is old enough yet
+            for (int step = 0; step < bufferSize; step++)
+            {
+                int idx = (writeHead - step + bufferSize) % bufferSize;
+                if (frameTimes[idx] <= targetTime) { readHead = idx; break; }
+            }
             screenRenderer.material.mainTexture = frameBuffer[readHead];
         }
 
