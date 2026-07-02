@@ -37,6 +37,12 @@ public class WebcamDelay : MonoBehaviour
     // changes (never per-frame). Assign directly, e.g. cam.OnStatusChanged = lbl.SetText.
     public System.Action<string> OnStatusChanged;
 
+    // True once the camera is streaming and the ring buffer is allocated. Lets callers
+    // avoid restarting a camera that's already running (a restart triggers the cold-start
+    // enumeration race) and gate trial start on a live feed.
+    // Getter shorthand - read only outside the class
+    public bool IsInitialized => isInitialized;
+
     private void SetStatus(string msg)
     {
         Debug.Log($"[Webcam] {msg}");
