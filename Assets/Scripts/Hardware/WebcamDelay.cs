@@ -32,6 +32,10 @@ public class WebcamDelay : MonoBehaviour
                                    // camera's actual/variable capture rate.
     private int writeHead = 0;
     private int bufferSize = 0;
+    private float firstRealFrameTime = -1f; // Time.time of the first genuinely-captured frame
+                                            // after init (-1 = none yet). Drives the readiness
+                                            // gate: we can only honour a delay of D once at
+                                            // least D seconds of real frames have accumulated.
     private float actualFPS = 30f; // Only used for buffer SIZING now, not for the delay itself.
     private bool isInitialized = false;
     private Coroutine activeRoutine; // Track so we can cancel on re-init
@@ -46,6 +50,16 @@ public class WebcamDelay : MonoBehaviour
     // enumeration race) and gate trial start on a live feed.
     // Getter shorthand - read only outside the class
     public bool IsInitialized => isInitialized;
+
+    // True once enough genuinely-captured frames have accumulated to honour a given delay — i.e.
+    // the camera has been streaming for at least `delaySeconds`. Before that the feed shows black
+    // rather than a stale primed frame, so callers can gate a trial's measurement window on this
+    // to guarantee every displayed frame is a real, correctly-delayed frame.
+    public bool IsReadyForDelay(float delaySeconds) =>
+        isInitialized && firstRealFrameTime >= 0f && (Time.time - firstRealFrameTime) >= delaySeconds;
+
+    // Readiness for the delay currently configured.
+    public bool IsReady => IsReadyForDelay(currentDelaySeconds);
 
     private void SetStatus(string msg)
     {
@@ -72,6 +86,7 @@ public class WebcamDelay : MonoBehaviour
     {
         isInitialized = false;
         writeHead = 0;
+        firstRealFrameTime = -1f;
         
         if (fpsRoutine != null) { StopCoroutine(fpsRoutine); fpsRoutine = null; }
 
@@ -157,13 +172,13 @@ public class WebcamDelay : MonoBehaviour
             frameBuffer[i] = new RenderTexture(webcam.width, webcam.height, 0, RenderTextureFormat.RGB565);
             frameBuffer[i].filterMode = textureFilterMode;
             frameBuffer[i].Create();
-            // Prime every slot with the current live frame. Otherwise a delayed read on the
-            // first trial pulls from slots that were Create()d but never written — i.e.
-            // uninitialised GPU memory (black/garbage) — until the write head laps the buffer.
-            Graphics.Blit(webcam, frameBuffer[i]);
-            // Stamp the primed frames in the past so the time-based read treats them as old
-            // (valid to show for any delay) until real, freshly-timed frames replace them.
-            frameTimes[i] = Time.time - maxDelayCap;
+            // Mark every slot as "no real frame yet" with a sentinel timestamp that can never
+            // satisfy the delay read (PositiveInfinity is never <= targetTime). The read never
+            // selects a slot until a genuinely-captured frame has been written into it, so we
+            // don't pre-fill slot contents — uninitialised GPU memory is never displayed. Until
+            // enough real history exists to honour the requested delay, the feed shows black
+            // rather than a stale/wrong-moment frame.
+            frameTimes[i] = float.PositiveInfinity;
         }
 
         isInitialized = true;
@@ -210,6 +225,7 @@ public class WebcamDelay : MonoBehaviour
         // A. Write current frame to buffer, timestamped with when we received it.
         Graphics.Blit(webcam, frameBuffer[writeHead]);
         frameTimes[writeHead] = Time.time;
+        if (firstRealFrameTime < 0f) firstRealFrameTime = Time.time; // arms the readiness gate
 
         // B. Read from Buffer (Delay Logic)
         if (currentDelaySeconds <= 0.02f)
@@ -222,13 +238,25 @@ public class WebcamDelay : MonoBehaviour
             // old. Walking back by real timestamps (rather than delay * fps) makes the applied
             // delay correct no matter the camera's actual or varying capture rate.
             float targetTime = Time.time - currentDelaySeconds;
-            int readHead = writeHead; // fallback: newest frame if none is old enough yet
+            int readHead = -1;
             for (int step = 0; step < bufferSize; step++)
             {
                 int idx = (writeHead - step + bufferSize) % bufferSize;
                 if (frameTimes[idx] <= targetTime) { readHead = idx; break; }
             }
-            screenRenderer.material.mainTexture = frameBuffer[readHead];
+
+            if (readHead >= 0)
+            {
+                screenRenderer.material.mainTexture = frameBuffer[readHead];
+            }
+            else
+            {
+                // No genuinely-captured frame is old enough yet (within the first
+                // currentDelaySeconds after the camera starts). Show black rather than a
+                // frozen/wrong-moment frame: a plausible-but-stale image would silently
+                // contaminate a delay-perception measurement, whereas black is unambiguous.
+                screenRenderer.material.mainTexture = Texture2D.blackTexture;
+            }
         }
 
         // C. Advance Write Head
