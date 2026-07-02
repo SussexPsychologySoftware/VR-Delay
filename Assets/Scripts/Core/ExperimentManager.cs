@@ -277,8 +277,13 @@ public class ExperimentManager : MonoBehaviour
         participantID = idInput.text;
         
         // Initialize Hardware
+        // The camera was already started during setup (preview / dropdown selection), so only
+        // (re)connect if it isn't already live. Restarting a working stream here would trigger
+        // the cold-start enumeration race right as trials begin, landing the reconnect latency
+        // on the first trial.
         string selectedCamera = webcamDropdown.options[webcamDropdown.value].text;
-        webcamScript.Initialize(selectedCamera);
+        if (!webcamScript.IsInitialized)
+            webcamScript.Initialize(selectedCamera);
         
         // Read Condition Indices
         bool selfFirst = (thresholdConditionDropdown.value == 0);
