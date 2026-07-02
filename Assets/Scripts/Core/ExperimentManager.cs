@@ -563,7 +563,7 @@ public class ExperimentManager : MonoBehaviour
         else if (trial.phase == ExperimentPhase.Long) phase = "LONG";
         UpdateExperimenterUI($"Phase: {phase}\n\nNext actor: {actor}\n\nPress 'Space' when ready.");
         
-        while (!Input.GetKeyDown(KeyCode.Space))
+        while (true)
         {
             // Allow Researcher to toggle camera to check setup
             if (Input.GetKeyDown(KeyCode.C))
@@ -571,6 +571,14 @@ public class ExperimentManager : MonoBehaviour
 				webcamScript.currentDelaySeconds = 0.0f; // remove delay for testing
                 bool current = webcamScript.IsVisualsEnabled();
                 webcamScript.SetVisuals(!current);
+            }
+
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                // Don't let a trial start against a half-connected stream — guarantees the feed
+                // (and the primed delay buffer) is live before stimulation begins.
+                if (webcamScript.IsInitialized) break;
+                UpdateExperimenterUI("Camera not ready — wait for connection or press Reconnect.");
             }
             yield return null;
         }
