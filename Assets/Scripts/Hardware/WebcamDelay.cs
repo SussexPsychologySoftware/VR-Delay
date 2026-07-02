@@ -150,8 +150,12 @@ public class WebcamDelay : MonoBehaviour
             frameBuffer[i] = new RenderTexture(webcam.width, webcam.height, 0, RenderTextureFormat.RGB565);
             frameBuffer[i].filterMode = textureFilterMode;
             frameBuffer[i].Create();
+            // Prime every slot with the current live frame. Otherwise a delayed read on the
+            // first trial pulls from slots that were Create()d but never written — i.e.
+            // uninitialised GPU memory (black/garbage) — until the write head laps the buffer.
+            Graphics.Blit(webcam, frameBuffer[i]);
         }
-        
+
         isInitialized = true;
 
         // requestedFPS above is only what we asked for. Log what the camera actually
