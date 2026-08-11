@@ -117,7 +117,7 @@ public class WebcamDelay : MonoBehaviour
         // screen and forces an app restart — retry a few times, letting the bus settle
         // between attempts. We always request the SAME format (60 FPS) so capture rate is
         // identical for every participant; we never silently fall back to a lower rate.
-        const int maxAttempts = 5;
+        const int maxAttempts = 2;
         const float timeoutPerAttempt = 8.0f; // cold-start enumeration can exceed 5s
 
         bool connected = false;
