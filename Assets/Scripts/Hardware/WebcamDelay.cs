@@ -173,6 +173,18 @@ public class WebcamDelay : MonoBehaviour
         frameBuffer = new RenderTexture[bufferSize];
         frameTimes = new float[bufferSize];
 
+        RenderTextureFormat format = RenderTextureFormat.ARGB32;
+        if (useCompactFormat)
+        {
+            if (SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGB565))
+                format = RenderTextureFormat.RGB565;
+            else
+                Debug.LogWarning("RGB565 render targets are not supported by this GPU/driver — falling back to ARGB32.");
+        }
+
+        float mbPerSlot = (webcam.width * webcam.height * (format == RenderTextureFormat.RGB565 ? 2 : 4)) / 1048576f;
+        Debug.Log($"Allocating delay buffer: {bufferSize} x {webcam.width}x{webcam.height} {format} " +
+                  $"= {(bufferSize * mbPerSlot):F0} MB VRAM");
         for (int i = 0; i < bufferSize; i++)
         {
             // RGB565 = 2 bytes/pixel (vs 4 for ARGB32). No alpha needed for webcam.
