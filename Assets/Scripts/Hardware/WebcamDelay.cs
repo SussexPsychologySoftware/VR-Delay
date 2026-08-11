@@ -169,7 +169,7 @@ public class WebcamDelay : MonoBehaviour
         actualFPS = webcam.requestedFPS > 0 ? webcam.requestedFPS : 30f;
         int safeFPS = Mathf.Max((int)actualFPS, 60); 
         
-        bufferSize = Mathf.CeilToInt(maxDelayCap * safeFPS) + safeFPS;
+        bufferSize = Mathf.CeilToInt(maxDelayCap * safeFPS) + Mathf.CeilToInt(0.25f * safeFPS);
         frameBuffer = new RenderTexture[bufferSize];
         frameTimes = new float[bufferSize];
 
