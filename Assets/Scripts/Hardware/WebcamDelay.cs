@@ -6,7 +6,7 @@ public class WebcamDelay : MonoBehaviour
     [Header("Configuration")]
     public int requestWidth = 1280; 
     public int requestHeight = 720;
-    public int requestFPS = 60; // Request 60 to force high-speed mode (low exposure/blur)
+    public int requestFPS = 30;
 
     [Header("Visual Quality")]
     [Tooltip("Adjust this slider in real-time to change screen size.")]
@@ -174,7 +174,7 @@ public class WebcamDelay : MonoBehaviour
         
         // Setup Ring Buffer
         actualFPS = webcam.requestedFPS > 0 ? webcam.requestedFPS : 30f;
-        int safeFPS = Mathf.Max((int)actualFPS, 60); 
+        int safeFPS = Mathf.Max(Mathf.CeilToInt(actualFPS * 1.5f), 30);
         
         bufferSize = Mathf.CeilToInt(maxDelayCap * safeFPS) + Mathf.CeilToInt(0.25f * safeFPS);
         frameBuffer = new RenderTexture[bufferSize];
@@ -255,8 +255,18 @@ public class WebcamDelay : MonoBehaviour
             yield return null;
         }
 
-        if (elapsed > 0f)
-            Debug.Log($"Webcam actual capture rate: {(frames / elapsed):F1} FPS (measured at startup)");
+        if (elapsed <= 0f) yield break;
+
+        float measured = frames / elapsed;
+        Debug.Log($"Webcam actual capture rate: {measured:F1} FPS (measured at startup)");
+        float secondsCovered = measured > 0f ? bufferSize / measured : float.PositiveInfinity;
+        if (secondsCovered < maxDelayCap)
+        {
+            Debug.LogError($"Delay buffer spans only {secondsCovered:F2}s at the measured {measured:F1} FPS, " +
+                           $"but maxDelayCap is {maxDelayCap:F2}s. Delays longer than {secondsCovered:F2}s " +
+                           "will display black. Raise requestFPS and reconnect the camera.");
+            SetStatus($"WARNING: buffer covers {secondsCovered:F2}s, need {maxDelayCap:F2}s.");
+        }
     }
 
     void Update()
