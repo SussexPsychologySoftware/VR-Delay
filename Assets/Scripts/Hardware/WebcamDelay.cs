@@ -185,13 +185,24 @@ public class WebcamDelay : MonoBehaviour
         float mbPerSlot = (webcam.width * webcam.height * (format == RenderTextureFormat.RGB565 ? 2 : 4)) / 1048576f;
         Debug.Log($"Allocating delay buffer: {bufferSize} x {webcam.width}x{webcam.height} {format} " +
                   $"= {(bufferSize * mbPerSlot):F0} MB VRAM");
+
         for (int i = 0; i < bufferSize; i++)
         {
-            // RGB565 = 2 bytes/pixel (vs 4 for ARGB32). No alpha needed for webcam.
-            // Halves VRAM usage per texture. Visually imperceptible for a live hand feed.
-            frameBuffer[i] = new RenderTexture(webcam.width, webcam.height, 0, RenderTextureFormat.RGB565);
+            frameBuffer[i] = new RenderTexture(webcam.width, webcam.height, 0, format);
             frameBuffer[i].filterMode = textureFilterMode;
-            frameBuffer[i].Create();
+
+            // Create() returns false when the driver refuses the allocation — out of VRAM, or
+            // a format it won't render to. Discarding that result leaves an invalid target
+            // that we then blit into every frame for the rest of the session: a silently
+            // broken stimulus, with no error anywhere. Fail loudly and stop instead.
+            if (!frameBuffer[i].Create())
+            {
+                Debug.LogError($"Failed to allocate delay buffer slot {i + 1}/{bufferSize} ({format}). " +
+                               "Lower maxDelayCap, or reduce the capture resolution.");
+                SetStatus($"GPU memory exhausted at {i + 1}/{bufferSize} frames. Lower the delay cap.");
+                CleanupResources();
+                yield break;
+            }
             // Mark every slot as "no real frame yet" with a sentinel timestamp that can never
             // satisfy the delay read (PositiveInfinity is never <= targetTime). The read never
             // selects a slot until a genuinely-captured frame has been written into it, so we
@@ -199,8 +210,20 @@ public class WebcamDelay : MonoBehaviour
             // enough real history exists to honour the requested delay, the feed shows black
             // rather than a stale/wrong-moment frame.
             frameTimes[i] = float.PositiveInfinity;
+
+            // Yield periodically. Allocating the whole buffer in one frame is a long
+            // synchronous burst of driver work, and Windows resets a display driver that stops
+            // responding for ~2s (a TDR) — which hangs the app in a way Task Manager cannot
+            // kill. Spreading the cost keeps every frame well inside that budget, and turns an
+            // apparent freeze into visible progress that names the slot it stopped on.
+            if ((i + 1) % 16 == 0)
+            {
+                SetStatus($"Preparing delay buffer... {i + 1}/{bufferSize}");
+                yield return null;
+            }
         }
 
+        SetStatus($"Ready: {webcam.width}x{webcam.height}");
         isInitialized = true;
 
         // requestedFPS above is only what we asked for. Log what the camera actually
