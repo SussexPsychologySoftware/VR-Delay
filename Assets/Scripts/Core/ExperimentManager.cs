@@ -255,8 +255,9 @@ public class ExperimentManager : MonoBehaviour
         // 7. HANDLE WEBCAM CHANGES
         // If the researcher picks a different camera, restart immediately
         webcamDropdown.onValueChanged.RemoveAllListeners();
-        webcamDropdown.onValueChanged.AddListener((index) => 
+        webcamDropdown.onValueChanged.AddListener((index) =>
         {
+            if (index < 0 || index >= webcamDropdown.options.Count) return;
             string newCam = webcamDropdown.options[index].text;
             webcamScript.Initialize(newCam);
         });
