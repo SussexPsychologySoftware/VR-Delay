@@ -10250,14 +10250,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: afb4512dfdde435ea9982f7c18d97028, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  requestWidth: 1920
-  requestHeight: 1080
-  requestFPS: 60
+  requestWidth: 1280
+  requestHeight: 720
+  requestFPS: 30
   viewSize: 0.65
   textureFilterMode: 2
   currentDelaySeconds: 0
   maxDelayCap: 1.1
-  useCompactFormat: 0
+  useCompactFormat: 1
 --- !u!64 &1582580841
 MeshCollider:
   m_ObjectHideFlags: 0
