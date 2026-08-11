@@ -125,6 +125,8 @@ public class WebcamDelay : MonoBehaviour
         {
             SetStatus($"Connecting to camera... (attempt {attempt}/{maxAttempts})");
 
+            yield return null;
+
             webcam = new WebCamTexture(deviceName, requestWidth, requestHeight, requestFPS);
             webcam.Play();
 
