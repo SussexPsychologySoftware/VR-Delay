@@ -90,7 +90,12 @@ public class WebcamDelay : MonoBehaviour
         
         if (fpsRoutine != null) { StopCoroutine(fpsRoutine); fpsRoutine = null; }
 
-        if (webcam != null) { webcam.Stop(); webcam = null; }
+        if (webcam != null)
+        {
+            webcam.Stop();
+            Destroy(webcam);
+            webcam = null;
+        }
         
         if (frameBuffer != null)
         {
@@ -141,8 +146,9 @@ public class WebcamDelay : MonoBehaviour
             // This attempt failed — tear down and let the driver/USB settle before retrying.
             Debug.LogWarning($"Webcam attempt {attempt} failed (stream didn't start). Retrying...");
             webcam.Stop();
+            Destroy(webcam); // Stop() alone orphans the capture handle — see CleanupResources
             webcam = null;
-            yield return new WaitForSeconds(1.0f);
+            yield return new WaitForSeconds(1.0f); // spans frames, so the Destroy above completes
         }
 
         if (!connected)
