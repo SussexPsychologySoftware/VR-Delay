@@ -247,12 +247,10 @@ public class ExperimentManager : MonoBehaviour
             });
         }
 
-        // Start the camera immediately with the default option
-        if (webcamDropdown.options.Count > 0)
-        {
-            string defaultCam = webcamDropdown.options[0].text;
-            webcamScript.Initialize(defaultCam);
-        }
+        if (webcamStatusLabel != null)
+            webcamStatusLabel.text = webcamDropdown.options.Count > 0
+                ? "Select camera, then press Connect."
+                : "No camera detected. Check Windows camera permissions.";
 
         // 7. HANDLE WEBCAM CHANGES
         // If the researcher picks a different camera, restart immediately
