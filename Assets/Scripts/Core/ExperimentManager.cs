@@ -243,8 +243,7 @@ public class ExperimentManager : MonoBehaviour
             reconnectButton.onClick.RemoveAllListeners();
             reconnectButton.onClick.AddListener(() =>
             {
-                string cam = webcamDropdown.options[webcamDropdown.value].text;
-                webcamScript.Initialize(cam);
+                if (TryGetSelectedCamera(out string cam)) webcamScript.Initialize(cam);
             });
         }
 
@@ -269,6 +268,20 @@ public class ExperimentManager : MonoBehaviour
         confirmButton.onClick.AddListener(OnConfirmSettings);
     }
     
+    private bool TryGetSelectedCamera(out string deviceName)
+    {
+        deviceName = null;
+        if (webcamDropdown.options.Count == 0)
+        {
+            const string msg = "No camera detected. Check Windows camera permissions, then press Connect.";
+            if (webcamStatusLabel != null) webcamStatusLabel.text = msg;
+            Debug.LogError(msg);
+            return false;
+        }
+        deviceName = webcamDropdown.options[webcamDropdown.value].text;
+        return true;
+    }
+
     public void OnConfirmSettings()
     {
         // Capture Final Decisions
@@ -281,9 +294,13 @@ public class ExperimentManager : MonoBehaviour
         // (re)connect if it isn't already live. Restarting a working stream here would trigger
         // the cold-start enumeration race right as trials begin, landing the reconnect latency
         // on the first trial.
-        string selectedCamera = webcamDropdown.options[webcamDropdown.value].text;
         if (!webcamScript.IsInitialized)
+        {
+            // No camera means no experiment — stay on the dashboard rather than starting a
+            // run that can never display a stimulus.
+            if (!TryGetSelectedCamera(out string selectedCamera)) return;
             webcamScript.Initialize(selectedCamera);
+        }
         
         // Read Condition Indices
         bool selfFirst = (thresholdConditionDropdown.value == 0);
