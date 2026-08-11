@@ -20,7 +20,14 @@ public class WebcamDelay : MonoBehaviour
     [Range(0f, 1.5f)] public float currentDelaySeconds = 0.0f;
 
     [Tooltip("The maximum delay you will ever test. Memory is reserved for this amount.")]
-    public float maxDelayCap = 1.5f; 
+    public float maxDelayCap = 1.5f;
+
+    [Tooltip("Store frames as RGB565 (half the VRAM per frame) instead of ARGB32. " +
+             "Render-target support for RGB565 is an OPTIONAL driver capability, not a " +
+             "guarantee — it can vary between GPUs and between driver versions on the same " +
+             "GPU. Leave this off unless you have confirmed it works on this exact GPU and " +
+             "driver AND you need the memory back.")]
+    public bool useCompactFormat = false;
 
     // Private internals
     private WebCamTexture webcam;
