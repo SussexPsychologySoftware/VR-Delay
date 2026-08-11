@@ -10256,7 +10256,8 @@ MonoBehaviour:
   viewSize: 0.65
   textureFilterMode: 2
   currentDelaySeconds: 0
-  maxDelayCap: 2
+  maxDelayCap: 1.1
+  useCompactFormat: 0
 --- !u!64 &1582580841
 MeshCollider:
   m_ObjectHideFlags: 0
