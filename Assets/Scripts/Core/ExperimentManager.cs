@@ -136,16 +136,47 @@ public class ExperimentManager : MonoBehaviour
         Debug.Log($"LSL Stream '{lslStreamName}' created.");
     }
 
+    private bool hardwareReleased = false;
+
+    // Hands back every OS-level resource this app holds: the USB capture device, the delay
+    // buffer's VRAM, and the LSL outlet's bound port and worker threads. Idempotent.
+    //
+    // This matters more here than in a typical app. A process that exits still holding the capture
+    // device or the LSL port leaves the NEXT launch fighting a ghost — the camera enumerates but
+    // never streams, or the outlet cannot bind — which is exactly the state RESET_APP.bat exists
+    // to clear by hand. Releasing deliberately, on every exit path we control, is what stops the
+    // machine needing that treatment.
+    void ReleaseAllHardware(string reason)
+    {
+        if (hardwareReleased) return;
+        hardwareReleased = true;
+
+        Debug.Log($"[Shutdown] Releasing hardware ({reason}).");
+
+        // Stops the stream, frees the 62 render targets, and cancels any connect still in flight.
+        if (webcamScript != null) webcamScript.Shutdown();
+
+        // The outlet holds a bound network port and liblsl worker threads. Leaving it to the
+        // SafeHandle finalizer is not good enough: if the app is killed the finalizer never runs
+        // and the port stays held.
+        lslOutlet?.Dispose();
+        lslOutlet = null;
+
+        // Data files need no flushing — every row goes out through File.AppendAllText, which
+        // opens, writes and closes, so nothing is sitting in a buffer waiting to be lost.
+    }
+
+    // Runs before OnDestroy and is the more reliable of the two for a normal exit.
+    private void OnApplicationQuit()
+    {
+        if (instance != this) return;
+        ReleaseAllHardware("application quit");
+    }
+
     private void OnDestroy()
     {
         if (instance != this) return; // a duplicate destroyed by the Awake guard owns nothing
-
-        // The outlet holds a bound network port and liblsl worker threads. Leaving it to the
-        // SafeHandle finalizer is not good enough here: if the app is killed after a driver reset
-        // the finalizer never runs, the port stays held by the zombie process, and the next launch
-        // silently loses the race for it — the "app won't reopen" failure RESET_APP.bat cleans up.
-        lslOutlet?.Dispose();
-        lslOutlet = null;
+        ReleaseAllHardware("object destroyed");
     }
     
     // Generates a unique marker string based on the current trial config
@@ -634,6 +665,14 @@ public class ExperimentManager : MonoBehaviour
                 webcamScript.SetVisuals(!current);
             }
 
+            // Escape is available between trials too, not only mid-stimulation — the researcher is
+            // most likely to want out while waiting on a participant, not during a 7s window.
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                AbortExperiment(trial, appliedDelay, "Escape_before_trial_start");
+                yield break;
+            }
+
             if (Input.GetKeyDown(KeyCode.Space))
             {
                 // Two separate conditions and both matter. IsInitialized means the stream is live;
@@ -700,12 +739,9 @@ public class ExperimentManager : MonoBehaviour
             }
 
             if(Input.GetKeyDown(KeyCode.Escape))
-            { 
-                // EMERGENCY EXIT --
-       
-               	webcamScript.SetVisuals(false);
-                isRunning=false; 
-                yield break; 
+            {
+                AbortExperiment(trial, appliedDelay, $"Escape_during_stimulation_at_{timer:F2}s");
+                yield break;
             }
             yield return null;
         }
@@ -748,13 +784,69 @@ public class ExperimentManager : MonoBehaviour
             UpdateExperimenterUI($"INCORRECT TRIAL PHASE! {trial}");
         }
 
-        // Wait here until the callback above sets qAnswered = true
-        yield return new WaitUntil(() => qAnswered);
+        // Wait here until the callback above sets qAnswered = true. Escape stays live throughout —
+        // the questionnaire is the longest and least predictable part of a trial, and it would be
+        // the worst place for the researcher's stop button to quietly not work.
+        while (!qAnswered)
+        {
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                AbortExperiment(trial, appliedDelay, "Escape_during_questionnaire");
+                yield break;
+            }
+            yield return null;
+        }
 
         SetControllersActive(false); // Disable lasers
         UpdateExperimenterUI("Trial Done. Press SPACE.");
         isRunning = false;
-    }  
+    }
+
+    // Ends the whole session, not just the current trial. Escape is the researcher's stop button:
+    // by the time they reach for it something has gone wrong with the participant, the headset or
+    // the camera, and continuing on to the next trial is never what they meant.
+    //
+    // Everything already written to disk stays. The CSVs are appended per trial, so every
+    // completed trial is intact and the abort is recorded as the final event with a count of what
+    // was never run. This does NOT quit the application — the researcher should be able to read
+    // the screen and check the data folder before closing it.
+    void AbortExperiment(TrialData trial, float appliedDelay, string reason)
+    {
+        int abandoned = trialStack.Count;
+
+        LogEvent(trial, appliedDelay, "Experiment_Aborted", $"{reason};trials_not_run={abandoned}");
+        Debug.LogWarning($"[Experiment] ABORTED during {trial.id} ({reason}). " +
+                         $"{abandoned} trial(s) not run. Completed trials are saved to {participantFolder}");
+
+        // Stop the stimulus and take the participant back out of the interaction loop.
+        webcamScript.SetVisuals(false);
+        webcamScript.currentDelaySeconds = 0f;
+        SetControllersActive(false);
+
+        // Drop any open questionnaire WITHOUT firing its callback, so an abort can never write a
+        // half-answered row for a trial the participant did not finish.
+        if (questionnaireScript != null) questionnaireScript.HideAll();
+
+        // Empty the stack so Update() cannot start another trial, and latch the completion message
+        // so its branch does not immediately overwrite this one. An aborted run must never be able
+        // to end up looking like a completed one on the researcher's screen.
+        trialStack.Clear();
+        completeMessageShown = true;
+        isRunning = false;
+
+        // Kill any trial coroutine still pending. The caller yield-breaks immediately after this
+        // returns, but an abort should not depend on its one caller being well behaved.
+        StopAllCoroutines();
+
+        // Hand the camera, the VRAM and the LSL port back now rather than holding them for however
+        // long the app stays open on this screen. An abort usually means something already went
+        // wrong, and that is the worst moment to be sitting on the resources the next launch needs.
+        ReleaseAllHardware("experiment aborted");
+
+        UpdateExperimenterUI($"EXPERIMENT ABORTED.\nID: {participantID}\n\n" +
+                             $"{abandoned} trial(s) not run.\nCompleted trials are saved.\n\n" +
+                             $"Camera released — restart the app for the next participant.");
+    }
 
     void UpdateExperimenterUI(string message) { if (experimenterDisplay != null) experimenterDisplay.text = message; }
     void PlayBeep() { if(audioSource) audioSource.Play(); }

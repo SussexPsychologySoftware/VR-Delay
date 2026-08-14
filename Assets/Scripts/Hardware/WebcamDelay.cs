@@ -141,6 +141,29 @@ public class WebcamDelay : MonoBehaviour
         activeRoutine = StartCoroutine(StartWebcamRoutine(selectedDeviceName));
     }
 
+    // Full teardown for the end of a session — abort, completion, or application quit. Stops the
+    // capture device and frees the delay buffer without a re-Initialize being what triggers it.
+    // Safe to call repeatedly, and safe when nothing was ever started.
+    public void Shutdown()
+    {
+        // Cancel an in-flight connect FIRST. CleanupResources on its own would free the buffer
+        // while StartWebcamRoutine was still mid-allocation, and the coroutine would carry on and
+        // hand back a live camera and a fresh buffer moments after we tore everything down.
+        if (activeRoutine != null) { StopCoroutine(activeRoutine); activeRoutine = null; }
+
+        bool hadSomething = webcam != null || frameBuffer != null;
+
+        CleanupResources();
+
+        // Clear this so a later Initialize is not short-circuited by the "already connected" guard.
+        currentDeviceName = null;
+
+        // Debug.Log rather than SetStatus: this runs during application quit, when the UI label the
+        // status callback writes to may already have been destroyed.
+        if (hadSomething)
+            Debug.Log("[Webcam] Capture device stopped and delay buffer released.");
+    }
+
     // Centralised cleanup — called on re-init AND on destroy
     private void CleanupResources()
     {
