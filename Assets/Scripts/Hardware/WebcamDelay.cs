@@ -61,6 +61,13 @@ public class WebcamDelay : MonoBehaviour
     // Getter shorthand - read only outside the class
     public bool IsInitialized => isInitialized;
 
+    // Count of genuinely-captured frames written to the ring buffer since the last Initialize.
+    // The delay itself is timestamp-based and stays correct however the rates drift, but a trial
+    // that displayed far fewer camera frames than its duration implies is a degraded stimulus.
+    // Sampling this either side of a trial turns that into a recorded, checkable number rather
+    // than something you would have had to be watching the screen to notice.
+    public long FramesCaptured { get; private set; }
+
     // True once enough genuinely-captured frames have accumulated to honour a given delay — i.e.
     // the camera has been streaming for at least `delaySeconds`. Before that the feed shows black
     // rather than a stale primed frame, so callers can gate a trial's measurement window on this
@@ -123,6 +130,7 @@ public class WebcamDelay : MonoBehaviour
         writeHead = 0;
         bufferSize = 0;
         firstRealFrameTime = -1f;
+        FramesCaptured = 0;
 
         if (fpsRoutine != null) { StopCoroutine(fpsRoutine); fpsRoutine = null; }
 
@@ -334,6 +342,7 @@ public class WebcamDelay : MonoBehaviour
         // A. Write current frame to buffer, timestamped with when we received it.
         Graphics.Blit(webcam, frameBuffer[writeHead]);
         frameTimes[writeHead] = Time.time;
+        FramesCaptured++;
         if (firstRealFrameTime < 0f) firstRealFrameTime = Time.time; // arms the readiness gate
 
         // B. Read from Buffer (Delay Logic)

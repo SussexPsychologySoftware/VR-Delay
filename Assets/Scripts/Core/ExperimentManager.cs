@@ -439,6 +439,29 @@ public class ExperimentManager : MonoBehaviour
         string row = $"{Time.time - startTime:F3},{t.phase},{t.id},{eventName},{eventValue},{appliedDelay:F3}";
         File.AppendAllText(eventLogPath, row + "\n");
     }
+
+    // A single frame this long is not a dropped frame, it is a stall — the app stopped submitting
+    // work for roughly nine refreshes at 90 Hz. One is worth knowing about; a run of them growing
+    // across a session is what a display driver reset looks like on the way in.
+    private const float HitchWarningMs = 100f;
+
+    // Frame telemetry for one stimulation window, as a single Events row. Semicolon-separated
+    // inside the Data column so the file keeps its six-column shape and still opens as CSV.
+    void LogFrameStats(TrialData t, float appliedDelay, float elapsed, int renderedFrames,
+                       float worstFrameMs, long camFrames)
+    {
+        if (elapsed <= 0f) return;
+
+        float renderFps = renderedFrames / elapsed;
+        float camFps = camFrames / elapsed;
+
+        LogEvent(t, appliedDelay, "Frame_Stats",
+                 $"renderFPS={renderFps:F1};camFPS={camFps:F1};worstFrameMs={worstFrameMs:F1}");
+
+        if (worstFrameMs >= HitchWarningMs)
+            Debug.LogWarning($"[FrameStats] {t.id}: worst frame {worstFrameMs:F0} ms " +
+                             $"(render {renderFps:F1} FPS, camera {camFps:F1} FPS).");
+    }
     
     private void GenerateAllTrials(bool selfFirst, int latinGroupIndex)
     {
@@ -627,27 +650,53 @@ public class ExperimentManager : MonoBehaviour
         LogEvent(trial, appliedDelay, "Stimulation_Start", "Visuals_On");
         SendLSLMarker(trial, "Start");
         
+        // Frame telemetry for the stimulation window only — the interval whose timing actually
+        // matters. Recorded rather than displayed: a number on screen needs someone watching it,
+        // whereas a row in the event log is still there when you are working out afterwards why a
+        // run died or whether a trial's stimulus was clean.
         float timer = 0;
+        string lastCountdown = null;
+        int renderedFrames = 0;
+        float worstFrameMs = 0f;
+        long camFramesAtStart = webcamScript.FramesCaptured;
+
         while (timer < trial.duration)
         {
             timer += Time.deltaTime;
-            UpdateExperimenterUI($"{phase}\n{actor}\n{trial.duration - timer:F1}s");
-            if(Input.GetKeyDown(KeyCode.Escape)) 
+
+            renderedFrames++;
+            // unscaled: we want true wall-clock cost, unaffected by any timeScale change.
+            float frameMs = Time.unscaledDeltaTime * 1000f;
+            if (frameMs > worstFrameMs) worstFrameMs = frameMs;
+
+            // Only touch the label when the tenth-of-a-second actually changes. Assigning
+            // TMP_Text.text forces a full text mesh rebuild, and doing that every frame for the
+            // whole stimulation window is a per-frame hitch during the exact interval whose
+            // timing the experiment is measuring.
+            string countdown = (trial.duration - timer).ToString("F1");
+            if (countdown != lastCountdown)
+            {
+                UpdateExperimenterUI($"{phase}\n{actor}\n{countdown}s");
+                lastCountdown = countdown;
+            }
+
+            if(Input.GetKeyDown(KeyCode.Escape))
             { 
-                // --- CHANGE 4: EMERGENCY EXIT ---
-                // OLD: screenObject.SetActive(false); 
-                // NEW:
-                webcamScript.SetVisuals(false);
+                // EMERGENCY EXIT --
+       
+               	webcamScript.SetVisuals(false);
                 isRunning=false; 
                 yield break; 
             }
             yield return null;
         }
 
-        webcamScript.SetVisuals(false);       
+        webcamScript.SetVisuals(false);
         SendLSLMarker(trial, "End");
         PlayBeep();
         LogEvent(trial, appliedDelay, "Stimulation_End", "Visuals_Off");
+        LogFrameStats(trial, appliedDelay, timer, renderedFrames, worstFrameMs,
+                      webcamScript.FramesCaptured - camFramesAtStart);
         
         // QUESTIONNAIRE LOGIC
         UpdateExperimenterUI("Waiting for Response...");
