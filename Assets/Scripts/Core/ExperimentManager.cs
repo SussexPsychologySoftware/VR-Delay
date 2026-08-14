@@ -126,9 +126,25 @@ public class ExperimentManager : MonoBehaviour
     void InitializeLSL()
     {
         // Define the stream info: Name, Type, Channel Count (1), Rate (0=Irregular/Event), Format (String)
-        StreamInfo streamInfo = new StreamInfo(lslStreamName, lslStreamType, 1, 0, channel_format_t.cf_string);
-        lslOutlet = new StreamOutlet(streamInfo);
+        // StreamInfo and StreamOutlet are SafeHandles over native liblsl objects. The outlet takes
+        // its own copy of the info, so the info can (and should) be released straight away.
+        using (StreamInfo streamInfo = new StreamInfo(lslStreamName, lslStreamType, 1, 0, channel_format_t.cf_string))
+        {
+            lslOutlet = new StreamOutlet(streamInfo);
+        }
         Debug.Log($"LSL Stream '{lslStreamName}' created.");
+    }
+
+    private void OnDestroy()
+    {
+        if (instance != this) return; // a duplicate destroyed by the Awake guard owns nothing
+
+        // The outlet holds a bound network port and liblsl worker threads. Leaving it to the
+        // SafeHandle finalizer is not good enough here: if the app is killed after a driver reset
+        // the finalizer never runs, the port stays held by the zombie process, and the next launch
+        // silently loses the race for it — the "app won't reopen" failure RESET_APP.bat cleans up.
+        lslOutlet?.Dispose();
+        lslOutlet = null;
     }
     
     // Generates a unique marker string based on the current trial config
