@@ -10257,7 +10257,7 @@ MonoBehaviour:
   textureFilterMode: 2
   currentDelaySeconds: 0
   maxDelayCap: 1.1
-  useCompactFormat: 1
+  useCompactFormat: 0
 --- !u!64 &1582580841
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -10358,6 +10358,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   webcam: {fileID: 0}
+  showOverlay: 1
 --- !u!1001 &1582711386
 PrefabInstance:
   m_ObjectHideFlags: 0
