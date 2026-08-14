@@ -29,6 +29,7 @@ public class ExperimentManager : MonoBehaviour
     private int globalTrialCounter = 0;
     private float startTime;
     private bool isRunning = false;
+    private bool completeMessageShown = false; // Latch — see Update()
     private TrialData currentTrial;
 
     public enum ExperimentPhase { Practice, Threshold, Long }
@@ -579,9 +580,14 @@ public class ExperimentManager : MonoBehaviour
                 trialStack.RemoveAt(0);
                 StartCoroutine(RunTrial(currentTrial));
         }
-        else if (!isRunning && trialStack.Count == 0)
+        else if (!isRunning && trialStack.Count == 0 && !completeMessageShown)
         {
+            // Latched. This branch is true on every frame from the last trial until the app is
+            // closed, and assigning TMP_Text.text rebuilds the entire text mesh — without the
+            // latch the app spends the rest of the session rebuilding the same string 90 times a
+            // second while the researcher is saving data and seeing the participant out.
             UpdateExperimenterUI($"EXPERIMENT COMPLETE.\nID: {participantID}");
+            completeMessageShown = true;
         }
     }
     
@@ -630,10 +636,23 @@ public class ExperimentManager : MonoBehaviour
 
             if (Input.GetKeyDown(KeyCode.Space))
             {
-                // Don't let a trial start against a half-connected stream — guarantees the feed
-                // (and the primed delay buffer) is live before stimulation begins.
-                if (webcamScript.IsInitialized) break;
-                UpdateExperimenterUI("Camera not ready — wait for connection or press Reconnect.");
+                // Two separate conditions and both matter. IsInitialized means the stream is live;
+                // IsReadyForDelay means enough genuinely-captured history exists to honour THIS
+                // trial's delay. After a mid-session reconnect the first becomes true well before
+                // the second, and starting in that window shows the participant black frames at
+                // stimulation onset with nothing in the data to say so.
+                if (!webcamScript.IsInitialized)
+                {
+                    UpdateExperimenterUI("Camera not ready — wait for connection or press Reconnect.");
+                }
+                else if (!webcamScript.IsReadyForDelay(appliedDelay))
+                {
+                    UpdateExperimenterUI($"Buffering {appliedDelay:F2}s of video —\nwait a moment, then press SPACE.");
+                }
+                else
+                {
+                    break;
+                }
             }
             yield return null;
         }
