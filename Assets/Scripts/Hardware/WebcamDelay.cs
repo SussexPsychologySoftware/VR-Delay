@@ -12,8 +12,11 @@ public class WebcamDelay : MonoBehaviour
     [Tooltip("Adjust this slider in real-time to change screen size.")]
     [Range(0.1f, 5.0f)] public float viewSize = 0.8f;
     
-    // Trilinear is much smoother for VR than Bilinear
-    public FilterMode textureFilterMode = FilterMode.Trilinear; 
+    // NOTE: the delay buffer is allocated without mipmaps, and trilinear filtering is precisely
+    // interpolation BETWEEN mip levels — with no mips to blend it is identical to Bilinear. This
+    // setting therefore has no visual effect on the feed; it is kept only so the inspector value
+    // does not silently change. Smoothness comes from capture resolution, not from this.
+    public FilterMode textureFilterMode = FilterMode.Trilinear;
 
     [Header("Experimental Variables")]
     [Tooltip("Change this dynamically during the experiment (0 = real-time).")]
@@ -47,6 +50,10 @@ public class WebcamDelay : MonoBehaviour
                                             // gate: we can only honour a delay of D once at
                                             // least D seconds of real frames have accumulated.
     private float actualFPS = 30f; // Only used for buffer SIZING now, not for the delay itself.
+
+    // Above this the delay buffer is a large enough share of a VR machine's VRAM to be worth
+    // saying out loud at connect time. Not a hard limit — allocation still proceeds.
+    private const float VramWarnMB = 150f;
     private bool isInitialized = false;
     private Coroutine activeRoutine; // Track so we can cancel on re-init
     private Coroutine fpsRoutine;    // Periodic actual-FPS logger
@@ -241,8 +248,21 @@ public class WebcamDelay : MonoBehaviour
         }
 
         float mbPerSlot = (webcam.width * webcam.height * (format == RenderTextureFormat.RGB565 ? 2 : 4)) / 1048576f;
+        float totalMB = bufferSize * mbPerSlot;
         Debug.Log($"Allocating delay buffer: {bufferSize} x {webcam.width}x{webcam.height} {format} " +
-                  $"= {(bufferSize * mbPerSlot):F0} MB VRAM");
+                  $"= {totalMB:F0} MB VRAM");
+
+        // The ring buffer is an unusually hostile allocation to sit alongside a VR runtime: the
+        // write head touches every slot once per lap, so the whole set stays hot and Windows can
+        // never page any of it out to make room for the compositor or the streaming encoder. When
+        // VRAM overcommits the driver starts moving memory across PCIe mid-frame, and a frame that
+        // overruns ~2s is what triggers the reset that takes the desktop down with it. Sizing is
+        // the one lever we control, so say plainly when it is getting large.
+        if (totalMB > VramWarnMB)
+            Debug.LogWarning($"Delay buffer is {totalMB:F0} MB and stays fully resident. With a VR " +
+                             $"runtime and a streaming encoder on the same GPU this is a lot to hold. " +
+                             $"Halving the capture resolution to {webcam.width / 2}x{webcam.height / 2} " +
+                             $"would cut it to {(totalMB / 4f):F0} MB.");
 
         for (int i = 0; i < bufferSize; i++)
         {
