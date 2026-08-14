@@ -63,6 +63,16 @@ public class QuestionnaireManager : MonoBehaviour
     
     // --- HELPER METHODS ---
 
+    // Used by the experiment's abort path. Closes any open questionnaire WITHOUT invoking the
+    // completion callback, and drops the callback entirely — a stale closure firing later would
+    // write a data row for a trial that was abandoned.
+    public void HideAll()
+    {
+        if (thresholdPanel) thresholdPanel.SetActive(false);
+        if (longPanel) longPanel.SetActive(false);
+        onCompleteCallback = null;
+    }
+
     public void SubmitLong()
     {
         // 1. Collect Data (9 columns)
