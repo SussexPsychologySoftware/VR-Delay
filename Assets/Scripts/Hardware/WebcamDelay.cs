@@ -32,6 +32,9 @@ public class WebcamDelay : MonoBehaviour
     // Private internals
     private WebCamTexture webcam;
     private Renderer screenRenderer;
+    private Material screenMaterial;   // Our instanced copy of the quad's material — see ScreenMaterial
+    private string currentDeviceName;  // Device the live stream belongs to. Lets us ignore a
+                                       // redundant re-Initialize for the camera already running.
     private RenderTexture[] frameBuffer;
     private float[] frameTimes;    // Capture time (Time.time) per slot, parallel to frameBuffer.
                                    // Lets us select the delayed frame by ELAPSED TIME rather than
@@ -74,27 +77,53 @@ public class WebcamDelay : MonoBehaviour
         OnStatusChanged?.Invoke(msg);
     }
 
+    // Renderer.material instantiates a private copy of the shared material on FIRST access and
+    // caches it on the renderer; that copy belongs to us and must be destroyed by us. Cached here
+    // so cleanup can clear the texture reference without a bare `.material` access accidentally
+    // instantiating a fresh copy during teardown.
+    private Material ScreenMaterial
+    {
+        get
+        {
+            if (screenMaterial == null && screenRenderer != null)
+                screenMaterial = screenRenderer.material;
+            return screenMaterial;
+        }
+    }
+
     // Call this from your ExperimentManager
     public void Initialize(string selectedDeviceName)
     {
+        // Re-opening the camera that is already streaming buys nothing and costs plenty: it
+        // closes and re-opens the USB capture device (the enumeration race this class retries
+        // around) and rebuilds the entire delay buffer. The dashboard drives this from a dropdown
+        // callback that fires on every value change, so the redundant case is the common one.
+        if (isInitialized && selectedDeviceName == currentDeviceName)
+        {
+            SetStatus($"Already connected: {webcam.width}x{webcam.height}");
+            return;
+        }
+
         screenRenderer = GetComponent<Renderer>();
-        
+        currentDeviceName = selectedDeviceName;
+
         // Stop any in-progress startup coroutine so we don't get two running
         if (activeRoutine != null) StopCoroutine(activeRoutine);
-        
+
         // Release old resources BEFORE allocating new ones
         CleanupResources();
-        
+
         activeRoutine = StartCoroutine(StartWebcamRoutine(selectedDeviceName));
     }
-    
+
     // Centralised cleanup — called on re-init AND on destroy
     private void CleanupResources()
     {
         isInitialized = false;
         writeHead = 0;
+        bufferSize = 0;
         firstRealFrameTime = -1f;
-        
+
         if (fpsRoutine != null) { StopCoroutine(fpsRoutine); fpsRoutine = null; }
 
         if (webcam != null)
@@ -103,11 +132,25 @@ public class WebcamDelay : MonoBehaviour
             Destroy(webcam);
             webcam = null;
         }
-        
+
+        // Drop the quad's reference to the buffer BEFORE releasing it. A material still pointing
+        // at a released RenderTexture counts as "using" it, and Unity re-creates a released
+        // target automatically on next use — so the surface comes straight back, except now we've
+        // dropped frameBuffer and nothing can ever free it again. One stranded full-resolution
+        // surface per reconnect, and it does not show up as a leaked object anywhere.
+        // Deliberately the cached field, not the ScreenMaterial property: if we never displayed a
+        // frame there is no instanced material yet, and going through the property would create
+        // one purely to blank it.
+        if (screenMaterial != null) screenMaterial.mainTexture = null;
+
         if (frameBuffer != null)
         {
             foreach (var rt in frameBuffer)
-                if (rt != null) rt.Release();
+            {
+                if (rt == null) continue;
+                rt.Release(); // frees the GPU surface now
+                Destroy(rt);  // frees the object — Release() alone leaves it alive and re-creatable
+            }
             frameBuffer = null;
         }
 
@@ -278,7 +321,13 @@ public class WebcamDelay : MonoBehaviour
         if (webcam.height > 0)
         {
             float aspect = (float)webcam.width / webcam.height;
-            transform.localScale = new Vector3(viewSize * aspect, viewSize, 1f);
+            Vector3 targetScale = new Vector3(viewSize * aspect, viewSize, 1f);
+
+            // This quad also carries a MeshCollider (for the XR ray interactors). Every write to
+            // localScale dirties the transform and forces PhysX to re-derive the scaled collision
+            // shape, whether or not the value actually changed. viewSize only moves when someone
+            // drags the inspector slider, so write only on a real change.
+            if (transform.localScale != targetScale) transform.localScale = targetScale;
         }
 
         // --- BUFFER LOGIC ---
@@ -290,7 +339,7 @@ public class WebcamDelay : MonoBehaviour
         // B. Read from Buffer (Delay Logic)
         if (currentDelaySeconds <= 0.02f)
         {
-            screenRenderer.material.mainTexture = frameBuffer[writeHead];
+            ScreenMaterial.mainTexture = frameBuffer[writeHead];
         }
         else
         {
@@ -307,7 +356,7 @@ public class WebcamDelay : MonoBehaviour
 
             if (readHead >= 0)
             {
-                screenRenderer.material.mainTexture = frameBuffer[readHead];
+                ScreenMaterial.mainTexture = frameBuffer[readHead];
             }
             else
             {
@@ -315,7 +364,7 @@ public class WebcamDelay : MonoBehaviour
                 // currentDelaySeconds after the camera starts). Show black rather than a
                 // frozen/wrong-moment frame: a plausible-but-stale image would silently
                 // contaminate a delay-perception measurement, whereas black is unambiguous.
-                screenRenderer.material.mainTexture = Texture2D.blackTexture;
+                ScreenMaterial.mainTexture = Texture2D.blackTexture;
             }
         }
 
@@ -326,6 +375,16 @@ public class WebcamDelay : MonoBehaviour
     void OnDestroy()
     {
         CleanupResources();
+
+        // Renderer.material handed us a private clone of the shared material. Unity does not
+        // reclaim it with the renderer — the docs put it on us — so it outlives the scene unless
+        // we destroy it here. One material is small, but it also keeps its texture references
+        // alive, which is how a "small" leak ends up pinning a full-resolution surface.
+        if (screenMaterial != null)
+        {
+            Destroy(screenMaterial);
+            screenMaterial = null;
+        }
     }
     
     public void SetVisuals(bool isVisible)
