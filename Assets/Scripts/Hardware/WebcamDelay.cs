@@ -1,4 +1,6 @@
 ﻿using UnityEngine;
+using UnityEngine.Experimental.Rendering;
+using UnityEngine.Rendering;
 using System.Collections;
 
 public class WebcamDelay : MonoBehaviour
@@ -32,6 +34,14 @@ public class WebcamDelay : MonoBehaviour
              "driver AND you need the memory back.")]
     public bool useCompactFormat = false;
 
+    [Tooltip("Copy captured frames into the delay buffer with Graphics.CopyTexture (a direct " +
+             "GPU-to-GPU copy) instead of Graphics.Blit (binds a render target and runs a " +
+             "shader). Cheaper and it does not touch XR stereo render state. Only used when the " +
+             "driver supports it and the camera's format can back a render texture; otherwise it " +
+             "falls back to Blit automatically. Turn OFF if the feed looks wrong or the log " +
+             "fills with CopyTexture errors.")]
+    public bool allowFastCopy = true;
+
     // Private internals
     private WebCamTexture webcam;
     private Renderer screenRenderer;
@@ -55,6 +65,7 @@ public class WebcamDelay : MonoBehaviour
     // saying out loud at connect time. Not a hard limit — allocation still proceeds.
     private const float VramWarnMB = 150f;
     private bool isInitialized = false;
+    private bool useFastCopy = false; // Resolved at connect time — see StartWebcamRoutine
     private Coroutine activeRoutine; // Track so we can cancel on re-init
     private Coroutine fpsRoutine;    // Periodic actual-FPS logger
 
@@ -264,9 +275,36 @@ public class WebcamDelay : MonoBehaviour
                              $"Halving the capture resolution to {webcam.width / 2}x{webcam.height / 2} " +
                              $"would cut it to {(totalMB / 4f):F0} MB.");
 
+        // Decide the write path once, here, rather than testing per frame.
+        //
+        // Graphics.Blit binds a render target, runs a fullscreen shader and restores the previous
+        // target — every captured frame, from Update(), i.e. outside the XR render pass. For what
+        // is only ever a straight copy that is a lot of driver traffic to put next to a VR
+        // compositor. Graphics.CopyTexture is a direct GPU-to-GPU copy: no target binding, no
+        // shader, no contact with stereo state.
+        //
+        // It requires an exact format match, so when it is available we build the ring buffer in
+        // the camera's own graphicsFormat instead of a fixed ARGB32. That also makes the copy
+        // bit-exact: a delayed frame then samples identically to the live camera texture, with no
+        // sRGB round trip through an intermediate format.
+        useFastCopy = allowFastCopy && !useCompactFormat
+                      && SystemInfo.copyTextureSupport.HasFlag(CopyTextureSupport.TextureToRT)
+                      && webcam.graphicsFormat != GraphicsFormat.None
+                      && SystemInfo.IsFormatSupported(webcam.graphicsFormat, FormatUsage.Render)
+                      && SystemInfo.IsFormatSupported(webcam.graphicsFormat, FormatUsage.Sample);
+
+        Debug.Log($"Delay buffer write path: {(useFastCopy ? "CopyTexture (direct GPU copy)" : "Blit (shader)")} " +
+                  $"— camera format {webcam.graphicsFormat}, buffer format " +
+                  $"{(useFastCopy ? webcam.graphicsFormat.ToString() : format.ToString())}.");
+
         for (int i = 0; i < bufferSize; i++)
         {
-            frameBuffer[i] = new RenderTexture(webcam.width, webcam.height, 0, format);
+            // mipCount 1 = base level only. The old ARGB32 constructor defaulted to no mip chain
+            // and the fallback branch below still uses it verbatim, so the two paths allocate
+            // equivalent surfaces and only the colour format differs.
+            frameBuffer[i] = useFastCopy
+                ? new RenderTexture(webcam.width, webcam.height, 0, webcam.graphicsFormat, 1)
+                : new RenderTexture(webcam.width, webcam.height, 0, format);
             frameBuffer[i].filterMode = textureFilterMode;
 
             // Create() returns false when the driver refuses the allocation — out of VRAM, or
@@ -360,7 +398,11 @@ public class WebcamDelay : MonoBehaviour
 
         // --- BUFFER LOGIC ---
         // A. Write current frame to buffer, timestamped with when we received it.
-        Graphics.Blit(webcam, frameBuffer[writeHead]);
+        if (useFastCopy)
+            Graphics.CopyTexture(webcam, frameBuffer[writeHead]);
+        else
+            Graphics.Blit(webcam, frameBuffer[writeHead]);
+
         frameTimes[writeHead] = Time.time;
         FramesCaptured++;
         if (firstRealFrameTime < 0f) firstRealFrameTime = Time.time; // arms the readiness gate
